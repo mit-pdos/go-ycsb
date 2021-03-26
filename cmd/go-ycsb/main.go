@@ -67,6 +67,9 @@ import (
 	_ "github.com/pingcap/go-ycsb/db/boltdb"
 	// Register minio
 	_ "github.com/pingcap/go-ycsb/db/minio"
+
+	// Register redis database, with kv interface
+	_ "github.com/pingcap/go-ycsb/db/rediskv"
 )
 
 var (
