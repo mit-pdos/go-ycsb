@@ -91,12 +91,12 @@ func newWorker(p *properties.Properties, threadID int, threadCount int, workload
 	return w
 }
 
-func (w *worker) throttle(ctx context.Context, startTime time.Time) {
+func (w *worker) throttle(ctx context.Context, startTime time.Time, allOpsDone int64) {
 	if w.targetOpsPerMs <= 0 {
 		return
 	}
 
-	d := time.Duration(w.opsDone * w.targetOpsTickNs)
+	d := time.Duration(allOpsDone * w.targetOpsTickNs)
 	d = startTime.Add(d).Sub(time.Now())
 	if d < 0 {
 		return
@@ -115,6 +115,7 @@ func (w *worker) run(ctx context.Context) {
 
 	startTime := time.Now()
 
+	allOpsDone := int64(0)
 	for w.opCount == 0 || w.opsDone < w.opCount {
 		var err error
 		opsCount := 1
@@ -138,10 +139,11 @@ func (w *worker) run(ctx context.Context) {
 			fmt.Printf("operation err: %v\n", err)
 		}
 
+		allOpsDone += int64(opsCount)
 		if measurement.IsWarmUpFinished() {
 			w.opsDone += int64(opsCount)
-			w.throttle(ctx, startTime)
 		}
+		w.throttle(ctx, startTime, allOpsDone)
 
 		select {
 		case <-ctx.Done():
