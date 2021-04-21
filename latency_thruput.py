@@ -8,6 +8,13 @@ import matplotlib.pyplot as plt
 import json
 import os
 import resource
+import itertools
+
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.size": 22
+})
 
 parser = argparse.ArgumentParser(
 description="Run benchmarks on kv services and generate latency-throughput graphs"
@@ -46,7 +53,7 @@ subparsers = parser.add_subparsers(dest="command")
 run_parser = subparsers.add_parser('run')
 run_parser.add_argument(
     "workload",
-    help="update|read",
+    help="update|read|both",
 )
 plot_parser = subparsers.add_parser('plot')
 plot_parser.add_argument(
@@ -137,7 +144,7 @@ def parse_ycsb_output(output):
     ms = re.finditer(patrn, output, flags=re.MULTILINE)
     a = dict()
     for m in ms:
-        a[m.group('opname').strip()] = {'thruput': float(m.group('ops')), 'avg_latency': float(m.group('avg_latency'))}
+        a[m.group('opname').strip()] = {'thruput': float(m.group('ops')), 'avg_latency': float(m.group('avg_latency')), 'raw': output}
     return a
 
 def find_peak_throughput(kvname, valuesize):
@@ -168,8 +175,8 @@ def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
     i = 0
     last_good_index = 0
     peak_thruput = 0
-    last_thruput = 10000
-    last_threads = 10
+    # last_thruput = 10000
+    # last_threads = 10
 
     while True:
         if i > last_good_index + 5:
@@ -178,9 +185,9 @@ def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
 
         # make a guess about the thruput this round;
         # another (probably better) option is to have no bound on the number of ops, and just kill the benchmark early after enough ops/time
-        pred_thruput = (last_thruput/last_threads) * threads
-        num_ops = int(pred_thruput * 5) # estimate enough operations for 10 seconds
-        a = parse_ycsb_output(ycsb_one(kvname, num_ops, -1, threads, valuesize, readprop, updateprop))
+        # pred_thruput = (last_thruput/last_threads) * threads
+        # num_ops = int(pred_thruput * 5) # estimate enough operations for 10 seconds
+        a = parse_ycsb_output(ycsb_one(kvname, 10, -1, threads, valuesize, readprop, updateprop))
         p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
 
         data = data + [ p ]
@@ -194,7 +201,7 @@ def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
         if thput > peak_thruput:
             peak_thruput = thput
 
-        last_thruput = int(thput + 1)
+        # last_thruput = int(thput + 1)
         last_threads = threads
 
         i = i + 1
@@ -209,22 +216,36 @@ def redis_read_bench():
     closed_lt('rediskv', 128, path.join(global_args.outdir, 'redis_read_closed_lt.jsons'), 1.0, 0.0, num_read_threads)
     cleanup_background()
 
+def gokv_update_bench():
+    closed_lt('memkv', 128, path.join(global_args.outdir, 'gokv_update_closed_lt.jsons'), 0.0, 1.0, num_update_threads)
+    cleanup_background()
+
+def gokv_read_bench():
+    closed_lt('memkv', 128, path.join(global_args.outdir, 'memkv_read_closed_lt.jsons'), 1.0, 0.0, num_read_threads)
+    cleanup_background()
+
 def main():
+    resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
+    # gokv_read_bench()
+    # return
     if global_args.command == 'run':
         os.makedirs(global_args.outdir, exist_ok=True)
         start_redis()
-        resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
         if global_args.workload == 'update':
-            redis_update_bench()
+            gokv_update_bench()
         elif global_args.workload == 'read':
-            redis_read_bench()
+            gokv_read_bench()
     elif global_args.command == 'plot':
-        data = []
-        if global_args.workload == 'update':
-            data = read_lt_data(path.join(global_args.outdir, 'redis_update_closed_lt.jsons'))
-        elif global_args.workload == 'read':
-            data = read_lt_data(path.join(global_args.outdir, 'redis_read_closed_lt.jsons'))
-        plot_lt(data)
+        datas = []
+        if global_args.workload == 'update' or global_args.workload == 'both':
+            redis_write_data = read_lt_data(path.join(global_args.outdir, 'redis_update_closed_lt.jsons'))
+            gokv_write_data = read_lt_data(path.join(global_args.outdir, 'gokv_update_closed_lt.jsons'))
+            datas += [redis_write_data, gokv_write_data]
+        if global_args.workload == 'read' or global_args.workload == 'both':
+            gokv_unsafe_read_data = read_lt_data(path.join(global_args.outdir, 'gokv_fast_unsafe_read_closed_lt.jsons'))
+            redis_read_data = read_lt_data(path.join(global_args.outdir, 'redis_read_closed_lt.jsons'))
+            datas += [redis_read_data, gokv_unsafe_read_data]
+        plot_lt(datas)
     cleanup_background()
 
 def read_lt_data(infilename):
@@ -234,7 +255,7 @@ def read_lt_data(infilename):
             data.append(json.loads(line))
     return data
 
-def plot_lt(data):
+def plot_lt(datas):
     """
     Assumes data is in format
     [ (kvname, numthreads, { 'OPERATION_TYPE': (throughput in ops/sec, latency in us), ... } ),  ... ]
@@ -243,29 +264,32 @@ def plot_lt(data):
     # ds =  [(40, {'UPDATE': (3671.7, 10773.0)}), (80, {'UPDATE': (6960.9, 11366.0)}), (120, {'UPDATE': (10251.0, 11642.0)}), (160, {'UPDATE': (13054.8, 12160.0)}), (200, {'UPDATE': (14917.7, 13270.0)}), (240, {'UPDATE': (17166.4, 13856.0)}), (280, {'UPDATE': (18630.4, 14889.0)}), (320, {'UPDATE': (21374.8, 14781.0)}), (360, {'UPDATE': (24216.1, 14710.0)}), (400, {'UPDATE': (24968.4, 15863.0)}), (440, {'UPDATE': (24225.0, 17944.0)}), (480, {'UPDATE': (24634.1, 19279.0)}), (520, {'UPDATE': (24461.3, 21066.0)}), (560, {'UPDATE': (30088.9, 18431.0)}), (600, {'UPDATE': (30493.1, 19568.0)}), (640, {'UPDATE': (32317.5, 19685.0)}), (680, {'UPDATE': (29337.9, 23087.0)}), (720, {'UPDATE': (33602.3, 21183.0)}), (760, {'UPDATE': (34762.7, 21750.0)}), (800, {'UPDATE': (33995.9, 23443.0)}), (840, {'UPDATE': (34785.0, 24043.0)}), (880, {'UPDATE': (35929.9, 24272.0)}), (920, {'UPDATE': (38012.5, 23960.0)}), (960, {'UPDATE': (38445.0, 24746.0)}), (1000, {'UPDATE': (39164.4, 25287.0)})]
     # ds = ds + [(1040, {'UPDATE': (39389.0, 26093.0)}), (1080, {'UPDATE': (39032.3, 27535.0)}), (1120, {'UPDATE': (37647.2, 29619.0)}), (1160, {'UPDATE': (38163.7, 30274.0)}), (1200, {'UPDATE': (39366.4, 30257.0)})]
     # ds = ds + [(1240, {'UPDATE': (39874.2, 30831.0)}), (1280, {'UPDATE': (40491.1, 31423.0)}), (1320, {'UPDATE': (41281.4, 31759.0)}), (1360, {'UPDATE': (41302.3, 32527.0)}), (1400, {'UPDATE': (42146.6, 32796.0)}), (1440, {'UPDATE': (42023.9, 33922.0)}), (1480, {'UPDATE': (41291.9, 35442.0)}), (1520, {'UPDATE': (41327.2, 36216.0)}), (1560, {'UPDATE': (43586.4, 35532.0)}), (1600, {'UPDATE': (39293.9, 40125.0)}), (1640, {'UPDATE': (43613.3, 37284.0)}), (1680, {'UPDATE': (42707.9, 39017.0)}), (1720, {'UPDATE': (43129.2, 39394.0)}), (1760, {'UPDATE': (43257.0, 40141.0)}), (1800, {'UPDATE': (43442.8, 40821.0)}), (1840, {'UPDATE': (43511.7, 41307.0)}), (1880, {'UPDATE': (43787.6, 42220.0)}), (1920, {'UPDATE': (43748.7, 43229.0)}), (1960, {'UPDATE': (44689.9, 43374.0)}), (2000, {'UPDATE': (44075.1, 44837.0)}), (2040, {'UPDATE': (44375.4, 45587.0)}), (2080, {'UPDATE': (41538.2, 49266.0)}), (2120, {'UPDATE': (44662.0, 46540.0)}), (2160, {'UPDATE': (44139.7, 48079.0)}), (2200, {'UPDATE': (45193.7, 47936.0)}), (2240, {'UPDATE': (44946.9, 48959.0)}), (2280, {'UPDATE': (45037.8, 49611.0)}), (2320, {'UPDATE': (45405.3, 50278.0)}), (2360, {'UPDATE': (44965.6, 51371.0)}), (2400, {'UPDATE': (44917.4, 52481.0)}), (2440, {'UPDATE': (44852.3, 53438.0)}), (2480, {'UPDATE': (46005.5, 53155.0)}), (2520, {'UPDATE': (45755.8, 54009.0)}), (2560, {'UPDATE': (45651.2, 55191.0)}), (2600, {'UPDATE': (44784.6, 56615.0)}), (2640, {'UPDATE': (44907.2, 57796.0)}), (2680, {'UPDATE': (46418.2, 56733.0)}), (2720, {'UPDATE': (45533.8, 57947.0)}), (2760, {'UPDATE': (47084.9, 57824.0)}), (2800, {'UPDATE': (46285.1, 59098.0)}), (2840, {'UPDATE': (46183.0, 59933.0)}), (2880, {'UPDATE': (46702.9, 60346.0)}), (2920, {'UPDATE': (47216.9, 60527.0)}), (2960, {'UPDATE': (46444.1, 62533.0)}), (3000, {'UPDATE': (46675.5, 62967.0)}), (3040, {'UPDATE': (46497.0, 63902.0)}), (3080, {'UPDATE': (47332.3, 64183.0)}), (3120, {'UPDATE': (47319.1, 64956.0)}), (3160, {'UPDATE': (46827.5, 65853.0)}), (3200, {'UPDATE': (47504.6, 66169.0)}), (3240, {'UPDATE': (46229.8, 67871.0)}), (3280, {'UPDATE': (46922.9, 68378.0)}), (3320, {'UPDATE': (47210.8, 68841.0)}), (3360, {'UPDATE': (48003.8, 68950.0)}), (3400, {'UPDATE': (47246.6, 70304.0)}), (3440, {'UPDATE': (47990.9, 70562.0)}), (3480, {'UPDATE': (47462.5, 71606.0)}), (3520, {'UPDATE': (47468.3, 72304.0)}), (3560, {'UPDATE': (47564.4, 73525.0)}), (3600, {'UPDATE': (47766.2, 74231.0)})]
-    rxs = []
-    rys = []
+    marker = itertools.cycle(('+', '.', 'o', '*'))
+    for data in datas:
+        rxs = []
+        rys = []
 
-    wxs = []
-    wys = []
+        wxs = []
+        wys = []
 
-    for d in data:
-        # TODO: look for updates and reads; if any other operation is found, report an error
-        for k, v in d['lts'].items():
-            if k == 'READ':
-                rxs = rxs + [v['thruput']]
-                rys = rys + [v['avg_latency'] / 1000]
-            if k == 'UPDATE':
-                wxs = wxs + [v['thruput']]
-                wys = wys + [v['avg_latency'] / 1000]
+        for d in data:
+            # TODO: look for updates and reads; if any other operation is found, report an error
+            for k, v in d['lts'].items():
+                if k == 'READ':
+                    rxs = rxs + [v['thruput']]
+                    rys = rys + [v['avg_latency'] / 1000]
+                if k == 'UPDATE':
+                    wxs = wxs + [v['thruput']]
+                    wys = wys + [v['avg_latency'] / 1000]
 
-    if wxs != []:
-        plt.plot(wxs, wys, '-o')
-    if rxs != []:
-        plt.plot(rxs, rys, '-o')
-    plt.xlabel('Throughput (ops/sec)')
-    plt.ylabel('Latency (ms)')
-    plt.title(data[0]['service'])
+        if wxs != []:
+            plt.plot(wxs, wys, marker = next(marker), label=data[0]['service'] + " updates")
+        if rxs != []:
+            plt.plot(rxs, rys, marker = next(marker), label=data[0]['service'] + " reads")
+        plt.xlabel('Throughput (ops/sec)')
+        plt.ylabel('Latency (ms)')
+        # plt.title(data[0]['service'])
+    plt.legend()
     plt.show()
 
 if __name__=='__main__':

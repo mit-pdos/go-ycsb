@@ -70,6 +70,10 @@ import (
 
 	// Register redis database, with kv interface
 	_ "github.com/pingcap/go-ycsb/db/rediskv"
+	// Register gokv
+	// _ "github.com/pingcap/go-ycsb/db/gokv"
+	// Register memkv
+	_ "github.com/pingcap/go-ycsb/db/memkv"
 )
 
 var (

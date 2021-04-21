@@ -1,0 +1,14 @@
+{"service": "rediskv", "num_threads": 1, "ratelimit": -1, "lts": {"READ": {"thruput": 29363.2, "avg_latency": 30.0}}}
+{"service": "rediskv", "num_threads": 2, "ratelimit": -1, "lts": {"READ": {"thruput": 56567.3, "avg_latency": 32.0}}}
+{"service": "rediskv", "num_threads": 3, "ratelimit": -1, "lts": {"READ": {"thruput": 63435.1, "avg_latency": 43.0}}}
+{"service": "rediskv", "num_threads": 4, "ratelimit": -1, "lts": {"READ": {"thruput": 80145.5, "avg_latency": 46.0}}}
+{"service": "rediskv", "num_threads": 5, "ratelimit": -1, "lts": {"READ": {"thruput": 87749.8, "avg_latency": 53.0}}}
+{"service": "rediskv", "num_threads": 10, "ratelimit": -1, "lts": {"READ": {"thruput": 100795.5, "avg_latency": 95.0}}}
+{"service": "rediskv", "num_threads": 20, "ratelimit": -1, "lts": {"READ": {"thruput": 108071.8, "avg_latency": 181.0}}}
+{"service": "rediskv", "num_threads": 30, "ratelimit": -1, "lts": {"READ": {"thruput": 110102.5, "avg_latency": 268.0}}}
+{"service": "rediskv", "num_threads": 40, "ratelimit": -1, "lts": {"READ": {"thruput": 110420.2, "avg_latency": 358.0}}}
+{"service": "rediskv", "num_threads": 50, "ratelimit": -1, "lts": {"READ": {"thruput": 110347.1, "avg_latency": 448.0}}}
+{"service": "rediskv", "num_threads": 60, "ratelimit": -1, "lts": {"READ": {"thruput": 110046.4, "avg_latency": 540.0}}}
+{"service": "rediskv", "num_threads": 70, "ratelimit": -1, "lts": {"READ": {"thruput": 110313.6, "avg_latency": 630.0}}}
+{"service": "rediskv", "num_threads": 80, "ratelimit": -1, "lts": {"READ": {"thruput": 109079.3, "avg_latency": 729.0}}}
+{"service": "rediskv", "num_threads": 90, "ratelimit": -1, "lts": {"READ": {"thruput": 110080.2, "avg_latency": 813.0}}}
