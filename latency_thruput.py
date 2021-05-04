@@ -60,18 +60,6 @@ def start_command(args):
     if not global_args.dry_run:
         return subprocess.Popen(args, text=True, stdout=subprocess.PIPE)
 
-backgrounds = []
-def background_run_command(args, cwd=None):
-    global backgrounds
-    if global_args.dry_run or global_args.verbose:
-        print("[BACKGROUND] " + " ".join(args))
-    if not global_args.dry_run:
-        backgrounds = backgrounds + [subprocess.Popen(args, cwd=cwd, stdout=subprocess.DEVNULL)]
-
-def cleanup_background():
-    for b in backgrounds:
-        b.kill()
-
 ycsb_dir = "."
 
 # kvname = redis|gokv; workload file just has configuration info, not workload info.
@@ -130,7 +118,6 @@ def num_threads(nshards):
             return nshards * (i - 4) * 10
     return temp
 
-# TODO: add a ycsb_many to run a small benchmark many times
 # TODO: ycsb_one should take a real-time parameter, and just kill the benchmark after that much time (post-warmup) has elapsed.
 def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
     data = []
@@ -170,8 +157,38 @@ def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
 
     return data
 
+def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
+    peak_thruput = 0
+    low = 1
+    high = -1
+
+    while True:
+        threads = 2*low
+        if high > 0:
+            if (high - low) < 10:
+                return peak_thruput
+            threads = int((low + high)/2)
+
+        a = parse_ycsb_output(ycsb_one(kvname, 10, -1, threads, valuesize, readprop, updateprop))
+        p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
+
+        with open(outfilename, 'a+') as outfile:
+            outfile.write(json.dumps(p) + '\n')
+
+        thput = sum([ a[op]['thruput'] for op in a ])
+        if thput > peak_thruput:
+            low = threads
+            peak_thruput = thput
+        else:
+            high = threads
+    return -1
+
 def generic_bench(s, readRatio, writeRatio, nshard):
     closed_lt(s, 128, path.join(global_args.outdir, s + '_update_closed_lt.jsons'), readRatio, writeRatio, num_threads(nshard))
+    cleanup_background()
+
+def generic_peak(s, readRatio, writeRatio, nshard):
+    find_peak_thruput(s, 128, path.join(global_args.outdir, s + '_peak.jsons'), readRatio, writeRatio, num_threads(nshard))
     cleanup_background()
 
 def read_lt_data(infilename):
@@ -186,8 +203,9 @@ def main():
     os.makedirs(global_args.outdir, exist_ok=True)
     if global_args.workload == 'update':
         generic_bench(global_args.system, 0.0, 1.0, int(global_args.nshard))
-    cleanup_background()
-
+    elif global_args.workload == 'peak':
+        p = generic_peak(global_args.system, 0.0, 1.0, int(global_args.nshard))
+        print("\n\nPeak throughput achieved was " + str(p))
 
 if __name__=='__main__':
     main()
