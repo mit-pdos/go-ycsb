@@ -17,7 +17,7 @@ plt.rcParams.update({
 })
 
 parser = argparse.ArgumentParser(
-description="Run benchmarks on kv services and generate latency-throughput graphs"
+description="Generate latency-throughput graphs"
 )
 parser.add_argument(
     "-v",
@@ -73,27 +73,16 @@ def plot_lt(datas):
     plt.show()
 
 def main():
-    resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
-    if global_args.command == 'run':
-        os.makedirs(global_args.outdir, exist_ok=True)
-        start_redis()
-        if global_args.workload == 'update':
-            gokv_update_bench()
-        elif global_args.workload == 'read':
-            gokv_read_bench()
-    elif global_args.command == 'plot':
-        datas = []
-        if global_args.workload == 'update' or global_args.workload == 'both':
-            redis_write_data = read_lt_data(path.join(global_args.outdir, 'redis_update_closed_lt.jsons'))
-            gokv_write_data = read_lt_data(path.join(global_args.outdir, 'gokv_update_closed_lt.jsons'))
-            datas += [redis_write_data, gokv_write_data]
-        if global_args.workload == 'read' or global_args.workload == 'both':
-            gokv_unsafe_read_data = read_lt_data(path.join(global_args.outdir, 'gokv_fast_unsafe_read_closed_lt.jsons'))
-            redis_read_data = read_lt_data(path.join(global_args.outdir, 'redis_read_closed_lt.jsons'))
-            datas += [redis_read_data, gokv_unsafe_read_data]
+    datas = []
+    if global_args.workload == 'update' or global_args.workload == 'both':
+        redis_write_data = read_lt_data(path.join(global_args.outdir, 'redis_update_closed_lt.jsons'))
+        gokv_write_data = read_lt_data(path.join(global_args.outdir, 'gokv_update_closed_lt.jsons'))
+        datas += [redis_write_data, gokv_write_data]
+    if global_args.workload == 'read' or global_args.workload == 'both':
+        gokv_unsafe_read_data = read_lt_data(path.join(global_args.outdir, 'gokv_fast_unsafe_read_closed_lt.jsons'))
+        redis_read_data = read_lt_data(path.join(global_args.outdir, 'redis_read_closed_lt.jsons'))
+        datas += [redis_read_data, gokv_unsafe_read_data]
         plot_lt(datas)
-    cleanup_background()
-
 
 if __name__=='__main__':
     main()
