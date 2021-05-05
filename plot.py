@@ -32,6 +32,8 @@ parser.add_argument(
     default=None,
 )
 
+global_args = parser.parse_args()
+
 def read_lt_data(infilename):
     with open(infilename, 'r') as f:
         data = []
@@ -74,15 +76,10 @@ def plot_lt(datas):
 
 def main():
     datas = []
-    if global_args.workload == 'update' or global_args.workload == 'both':
-        redis_write_data = read_lt_data(path.join(global_args.outdir, 'redis_update_closed_lt.jsons'))
-        gokv_write_data = read_lt_data(path.join(global_args.outdir, 'gokv_update_closed_lt.jsons'))
-        datas += [redis_write_data, gokv_write_data]
-    if global_args.workload == 'read' or global_args.workload == 'both':
-        gokv_unsafe_read_data = read_lt_data(path.join(global_args.outdir, 'gokv_fast_unsafe_read_closed_lt.jsons'))
-        redis_read_data = read_lt_data(path.join(global_args.outdir, 'redis_read_closed_lt.jsons'))
-        datas += [redis_read_data, gokv_unsafe_read_data]
-        plot_lt(datas)
+    redis_write_data = read_lt_data(path.join(global_args.outdir, 'rediskv_update_closed_lt.jsons'))
+    memkv_write_data = read_lt_data(path.join(global_args.outdir, 'memkv_update_closed_lt.jsons'))
+    datas += [redis_write_data, memkv_write_data]
+    plot_lt(datas)
 
 if __name__=='__main__':
     main()

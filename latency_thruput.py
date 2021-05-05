@@ -84,7 +84,7 @@ def ycsb_one(kvname:str, runtime:int, target_rps:int, threads:int, valuesize:int
 
     ret = ''
     for stdout_line in iter(p.stdout.readline, ""):
-        if stdout_line.find('Takes(s): 10.') != -1:
+        if stdout_line.find('Takes(s): 60.') != -1:
             ret = stdout_line
             break
     p.stdout.close()
@@ -115,7 +115,7 @@ def num_threads(nshards):
         if i < 5:
             return i + 1
         else:
-            return nshards * (i - 4) * 10
+            return nshards * (i - 4) * 5
     return temp
 
 # TODO: ycsb_one should take a real-time parameter, and just kill the benchmark after that much time (post-warmup) has elapsed.
@@ -185,11 +185,9 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, thre
 
 def generic_bench(s, readRatio, writeRatio, nshard):
     closed_lt(s, 128, path.join(global_args.outdir, s + '_update_closed_lt.jsons'), readRatio, writeRatio, num_threads(nshard))
-    cleanup_background()
 
 def generic_peak(s, readRatio, writeRatio, nshard):
     find_peak_thruput(s, 128, path.join(global_args.outdir, s + '_peak.jsons'), readRatio, writeRatio, num_threads(nshard))
-    cleanup_background()
 
 def read_lt_data(infilename):
     with open(infilename, 'r') as f:
