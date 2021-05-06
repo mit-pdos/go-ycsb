@@ -13,7 +13,7 @@ import itertools
 plt.rcParams.update({
     "text.usetex": True,
     "font.family": "serif",
-    "font.size": 22
+    "font.size": 16
 })
 
 parser = argparse.ArgumentParser(
@@ -47,32 +47,42 @@ def plot_lt(datas):
     [ (kvname, numthreads, { 'OPERATION_TYPE': (throughput in ops/sec, latency in us), ... } ),  ... ]
     """
     marker = itertools.cycle(('+', '.', 'o', '*'))
+    fig = plt.figure()
     for data in datas:
-        rxs = []
-        rys = []
+        # rxs = []
+        # rys = []
 
-        wxs = []
-        wys = []
+        # wxs = []
+        # wys = []
+
+        xys = []
 
         for d in data:
             # TODO: look for updates and reads; if any other operation is found, report an error
+            x = 0.0
+            y = 0.0
             for k, v in d['lts'].items():
                 if k == 'READ':
-                    rxs = rxs + [v['thruput']]
-                    rys = rys + [v['avg_latency'] / 1000]
+                    throw("unimpl")
                 if k == 'UPDATE':
-                    wxs = wxs + [v['thruput']]
-                    wys = wys + [v['avg_latency'] / 1000]
+                    x = x + v['thruput']
+                    y = y + v['avg_latency'] / 1000
+            xys.append((x,y))
 
-        if wxs != []:
-            plt.plot(wxs, wys, marker = next(marker), label=data[0]['service'] + " updates")
-        if rxs != []:
-            plt.plot(rxs, rys, marker = next(marker), label=data[0]['service'] + " reads")
-        plt.xlabel('Throughput (ops/sec)')
-        plt.ylabel('Latency (ms)')
+        with open(data[0]['service'] + '.dat', 'w') as f:
+            for xy in xys:
+                print('{0}, {1}'.format(xy[0], xy[1]), file=f)
+
+        # if wxs != []:
+            # plt.plot(wxs, wys, marker = next(marker), label=data[0]['service'] + " puts")
+        # if rxs != []:
+            # plt.plot(rxs, rys, marker = next(marker), label=data[0]['service'] + " gets")
+        # plt.xlabel('Throughput (ops/sec)')
+        # plt.ylabel('Latency (ms)')
         # plt.title(data[0]['service'])
-    plt.legend()
-    plt.show()
+    # plt.legend()
+    # plt.tight_layout()
+    # fig.savefig('temp.pdf')
 
 def main():
     datas = []
