@@ -53,22 +53,14 @@ def cleanup_procs():
         os.killpg(os.getpgid(p.pid), signal.SIGKILL)
     procs = []
 
-def start_memkv():
-    coord = start_command(["go", "run",
-                           "cmd/memkvcoord", "-init",
-                           "127.0.0.1:12300", "-port", "12200"])
-    shard = start_command(["go", "run",
-                           "github.com/mit-pdos/gokv/cmd/memkvshard", "-init",
-                           "-port", "12300"])
-
 def one_core(args, i):
     return ["numactl", "-C", str(i)] + args
 
-def two_cores(args, i, j):
-    return ["numactl", "-C", str(i) + "," + str(j)] + args
+def many_cores(args, c):
+    return ["numactl", "-C", c] + args
 
 # Starts server on port 12345
-def start_memkv(servers):
+def start_memkv_multiserver(servers):
     ps = []
     coord = start_command(["go", "run",
                            "./cmd/memkvcoord", "-init",
@@ -80,17 +72,21 @@ def start_memkv(servers):
         ps.append(rpcscale)
         time.sleep(1)
         run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
-    print("[INFO] Started single core memkv servers")
+    print("[INFO] Started single core memkv servers with {0} servers".format(servers))
     return ps
 
-def start_memkv2():
+def start_memkv_multicore(cores):
     ps = []
+    c = "0"
+    for i in range(1,cores):
+        c += "," + str(i)
+
     coord = start_command(["go", "run",
                            "./cmd/memkvcoord", "-init",
                            "127.0.0.1:12300", "-port", "12200"], cwd=gokvdir)
     ps.append(coord)
-    ps.append(start_command(two_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(12300)], 0, 1), cwd=gokvdir))
-    print("[INFO] Started two core memkv servers")
+    ps.append(start_command(many_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(12300)], c), cwd=gokvdir))
+    print("[INFO] Started a memkv server with {0} cores".format(cores))
     return ps
 
 
@@ -130,13 +126,24 @@ def main():
     # cleanup_procs()
 
     time.sleep(0.5)
-    ps = start_memkv(2)
+    ps = start_memkv_multiserver(2)
     time.sleep(0.5)
     goycsb_bench()
     cleanup_procs()
 
     time.sleep(0.5)
-    ps = start_memkv2()
+    ps = start_memkv_multiserver(3)
+    time.sleep(0.5)
+    goycsb_bench()
+    cleanup_procs()
+
+    time.sleep(0.5)
+    ps = start_memkv_multicore(2)
+    time.sleep(0.5)
+    goycsb_bench()
+
+    time.sleep(0.5)
+    ps = start_memkv_multicore(3)
     time.sleep(0.5)
     goycsb_bench()
 
