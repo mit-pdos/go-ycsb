@@ -116,7 +116,7 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop):
     while True:
         threads = 2*low
         if high > 0:
-            if (high - low) < 10:
+            if (high - low) < 4:
                 return peak_thruput
             threads = int((low + high)/2)
 

@@ -35,7 +35,7 @@ require (
 	github.com/magiconair/properties v1.8.5
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/mit-pdos/gokv v0.0.0-20210503234607-9dfcabd7e852
+	github.com/mit-pdos/gokv v0.0.0-20210629010648-6a3026e645ac
 	github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pingcap/errors v0.11.1
@@ -45,7 +45,7 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a // indirect
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
-	github.com/tchajed/marshal v0.0.0-20210312145633-4d998c90d194
+	github.com/tchajed/marshal v0.2.0
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tikv/client-go v0.0.0-20190421092910-44b82dcc9f4a
