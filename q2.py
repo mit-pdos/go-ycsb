@@ -9,6 +9,7 @@ import resource
 import itertools
 import time
 import atexit
+import signal
 
 parser = argparse.ArgumentParser(
 description="Do two single-core rpc servers give better perf than a single two-core rpc server?"
@@ -41,7 +42,7 @@ def start_command(args, cwd=None):
     if global_args.dry_run or global_args.verbose:
         print("[STARTING] " + " ".join(args))
     if not global_args.dry_run:
-        p = subprocess.Popen(args, text=True, stdout=subprocess.PIPE, cwd=cwd)
+        p = subprocess.Popen(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, preexec_fn=os.setsid)
         global procs
         procs.append(p)
         return p
@@ -49,7 +50,7 @@ def start_command(args, cwd=None):
 def cleanup_procs():
     global procs
     for p in procs:
-        p.kill()
+        os.killpg(os.getpgid(p.pid), signal.SIGKILL)
     procs = []
 
 def start_memkv():
@@ -67,7 +68,7 @@ def two_cores(args, i, j):
     return ["numactl", "-C", str(i) + "," + str(j)] + args
 
 # Starts server on port 12345
-def start_rpcscale(servers):
+def start_memkv(servers):
     ps = []
     coord = start_command(["go", "run",
                            "./cmd/memkvcoord", "-init",
@@ -79,8 +80,19 @@ def start_rpcscale(servers):
         ps.append(rpcscale)
         time.sleep(1)
         run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
-    print("[INFO] Started rpcscale (and coord) server")
+    print("[INFO] Started single core memkv servers")
     return ps
+
+def start_memkv2():
+    ps = []
+    coord = start_command(["go", "run",
+                           "./cmd/memkvcoord", "-init",
+                           "127.0.0.1:12300", "-port", "12200"], cwd=gokvdir)
+    ps.append(coord)
+    ps.append(start_command(two_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(12300)], 0, 1), cwd=gokvdir))
+    print("[INFO] Started two core memkv servers")
+    return ps
+
 
 def goycsb_bench():
     p = start_command(["go", "run", "./cmd/go-ycsb",
@@ -91,7 +103,7 @@ def goycsb_bench():
                        "readproportion=1.0", "-p", "updateproportion=0.0", "-p",
                        "memkv.coord=127.0.0.1:12200",], cwd=goycsbdir)
 
-    print("Throughput of goycsb rpcscale benchmark")
+    print("Throughput of goycsb against memkv")
     seconds = 0
     for stdout_line in iter(p.stdout.readline, ""):
         patrn = "OPS: (?P<ops>.*), Avg"
@@ -112,17 +124,21 @@ def main():
     goycsbdir = os.path.dirname(os.path.abspath(__file__))
     gokvdir = os.path.join(os.path.dirname(goycsbdir), "gokv")
 
-    ps = start_rpcscale(1)
-    time.sleep(1)
+    # ps = start_memkv(1)
+    # time.sleep(1)
+    # goycsb_bench()
+    # cleanup_procs()
+
+    time.sleep(0.5)
+    ps = start_memkv(2)
+    time.sleep(0.5)
     goycsb_bench()
     cleanup_procs()
 
-    time.sleep(3)
-    ps = start_rpcscale(2)
+    time.sleep(0.5)
+    ps = start_memkv2()
     time.sleep(0.5)
     goycsb_bench()
-    for p in ps:
-        p.kill()
 
 if __name__=='__main__':
     main()
