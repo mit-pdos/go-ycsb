@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# ran against gokv commit 252e0477e68b812631b0ec8b9dca7fa7d295e8b5
+
 from os import path
 import argparse
 import subprocess
@@ -26,6 +28,12 @@ parser.add_argument(
     help="print commands in addition to running them",
     action="store_true",
 )
+parser.add_argument(
+    "-e",
+    "--errors",
+    help="print stderr from commands being run",
+    action="store_true",
+)
 global_args = parser.parse_args()
 gokvdir = ''
 goycsbdir = ''
@@ -42,7 +50,10 @@ def start_command(args, cwd=None):
     if global_args.dry_run or global_args.verbose:
         print("[STARTING] " + " ".join(args))
     if not global_args.dry_run:
-        p = subprocess.Popen(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, preexec_fn=os.setsid)
+        e = subprocess.PIPE
+        if global_args.errors:
+            e = None
+        p = subprocess.Popen(args, text=True, stdout=subprocess.PIPE, stderr=e, cwd=cwd, preexec_fn=os.setsid)
         global procs
         procs.append(p)
         return p
@@ -91,13 +102,13 @@ def start_memkv_multicore(cores):
 
 
 def goycsb_bench():
-    p = start_command(["go", "run", "./cmd/go-ycsb",
-                       "run", "memkv", "-P", "../gokv/bench/memkv_workload",
-                       "--threads", "64", "--target", "-1",
-                       "--interval","1", "-p", "operationcount=4294967295", "-p",
-                       "fieldlength=128", "-p", "requestdistribution=uniform", "-p",
-                       "readproportion=1.0", "-p", "updateproportion=0.0", "-p",
-                       "memkv.coord=127.0.0.1:12200",], cwd=goycsbdir)
+    p = start_command(many_cores(["go", "run", "./cmd/go-ycsb",
+                                  "run", "memkv", "-P", "../gokv/bench/memkv_workload",
+                                  "--threads", "64", "--target", "-1",
+                                  "--interval","1", "-p", "operationcount=4294967295", "-p",
+                                  "fieldlength=128", "-p", "requestdistribution=uniform", "-p",
+                                  "readproportion=1.0", "-p", "updateproportion=0.0", "-p",
+                                  "memkv.coord=127.0.0.1:12200",], "3,4,5"), cwd=goycsbdir)
 
     print("Throughput of goycsb against memkv")
     seconds = 0
@@ -108,7 +119,7 @@ def goycsb_bench():
         if m:
             print('\r' + m.group('ops'), end='', flush=True)
             seconds += 1
-        if seconds > 5:
+        if seconds > 10:
             print()
             return
 
