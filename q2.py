@@ -152,11 +152,13 @@ def main():
     ps = start_memkv_multicore(2)
     time.sleep(0.5)
     goycsb_bench()
+    cleanup_procs()
 
     time.sleep(0.5)
     ps = start_memkv_multicore(3)
     time.sleep(0.5)
     goycsb_bench()
+    cleanup_procs()
 
 if __name__=='__main__':
     main()
