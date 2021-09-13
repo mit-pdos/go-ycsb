@@ -11,6 +11,8 @@ import time
 import atexit
 import signal
 
+import peak_config
+
 parser = argparse.ArgumentParser(
 description="Find peak throughput of KV service for a varying number of shard servers"
 )
@@ -37,14 +39,6 @@ parser.add_argument(
     "--errors",
     help="print stderr from commands being run",
     action="store_true",
-)
-parser.add_argument(
-    "ncore",
-    help="Number of cores per shard server",
-)
-parser.add_argument(
-    "nshard",
-    help="Maximum number of shards to increase to",
 )
 global_args = parser.parse_args()
 gokvdir = ''
@@ -76,30 +70,35 @@ def cleanup_procs():
         os.killpg(os.getpgid(p.pid), signal.SIGKILL)
     procs = []
 
-def one_core(args, i):
-    return ["numactl", "-C", str(i)] + args
-
 def many_cores(args, c):
     return ["numactl", "-C", c] + args
 
+def one_core(args, c):
+    return ["numactl", "-C", str(c)] + args
+
 # Starts server on port 12345
-def start_memkv_multiserver(servers, cores_per_server):
-    assert servers > 0, "Must have at least 1 shard server"
+def start_memkv_multiserver(config:list[list[int]]):
+    """
+    Given a list of lists of cores for each shard server, this brings up the kv
+    system
+    """
     start_command(["go", "run",
                    "./cmd/memkvcoord", "-init",
                    "127.0.0.1:12300", "-port", "12200"], cwd=gokvdir)
-    start_command(one_core(["go", "run", "./cmd/memkvshard", "-init", "-port", str(12300)], 0), cwd=gokvdir)
 
-    for i in range(1, servers):
-        start_shard_multicore(i*cores_per_server, cores_per_server, 12300 + i)
+    for i, corelist in enumerate(config):
+        start_shard_multicore(12300 + i, corelist, i == 0)
         time.sleep(0.3)
         run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
-    print("[INFO] Started kv service with {0} servers".format(servers))
+    print("[INFO] Started kv service with {0} server(s)".format(len(config)))
 
-def start_shard_multicore(first_core, cores, port):
-    c = ",".join([str(j) for j in range(first_core, first_core+cores)])
-    start_command(many_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(port)], c), cwd=gokvdir)
-    print("[INFO] Started a shard server with {0} cores on port {1}".format(cores, port))
+def start_shard_multicore(port:int, corelist:list[int], init:bool):
+    c = ",".join([str(j) for j in corelist])
+    if init:
+        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(port)], c), cwd=gokvdir)
+    else:
+        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-port", str(port)], c), cwd=gokvdir)
+    print("[INFO] Started a shard server with {0} cores on port {1}".format(len(corelist), port))
 
 def parse_ycsb_output(output):
     # look for 'Run finished, takes...', then parse the lines for each of the operations
@@ -135,6 +134,7 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
                                   '-p', 'memkv.coord=127.0.0.1:12200',
+                                  '-p', 'warmup=1', # TODO: increase warmup
                                   ], c), cwd=goycsbdir)
 
     if p is None:
@@ -161,13 +161,14 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop):
                 return peak_thruput
             threads = int((low + high)/2)
 
-        a = goycsb_bench(threads, 10, 128, readprop, updateprop, range(0,2))
+        a = goycsb_bench(threads, 1, 128, readprop, updateprop, range(0,2))
         p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
 
         with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
             outfile.write(json.dumps(p) + '\n')
 
         thput = sum([ a[op]['thruput'] for op in a ])
+        return thput # FIXME: get rid of this
         if thput > peak_thruput:
             low = threads
             peak_thruput = thput
@@ -175,19 +176,21 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop):
             high = threads
     return -1
 
-
 def main():
     atexit.register(cleanup_procs)
     global gokvdir
     global goycsbdir
     goycsbdir = os.path.dirname(os.path.abspath(__file__))
     gokvdir = os.path.join(os.path.dirname(goycsbdir), "gokv")
+    os.makedirs(global_args.outdir, exist_ok=True)
 
-    for i in range(1, int(global_args.nshard)):
+    for config in peak_config.configs:
         time.sleep(0.5)
-        ps = start_memkv_multiserver(i, global_args.ncore)
+        ps = start_memkv_multiserver(config['srvs'])
         time.sleep(0.5)
-        peak = find_peak_thruput('memkv', 128, 'memkv_peak.jsons', 0.95, 0.05)
+        peak = find_peak_thruput('memkv', 128, 'memkv_peak_raw.jsons', 0.95, 0.05)
+        with open(path.join(global_args.outdir, 'memkv_peaks.jsons'), 'a+') as outfile:
+            outfile.write(json.dumps({'name': config['name'], 'thruput':peak }) + '\n')
 
         cleanup_procs()
 
