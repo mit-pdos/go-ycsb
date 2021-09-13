@@ -9,7 +9,7 @@ import resource
 import itertools
 
 parser = argparse.ArgumentParser(
-description="Run benchmarks on kv services and generate latency-throughput graphs"
+description="Find peak throughput of KV service for a varying number of shard servers"
 )
 parser.add_argument(
     "-n",
@@ -29,13 +29,10 @@ parser.add_argument(
     required=True,
     default=None,
 )
-# subparsers = parser.add_subparsers(dest="command")
-# run_parser = subparsers.add_parser('run')
 parser.add_argument(
-    "system",
-    help="memkv|redis",
+    "nshard",
+    help="Number of shards in system",
 )
-
 parser.add_argument(
     "nshard",
     help="Number of shards in system",
@@ -64,7 +61,7 @@ def start_command(args, gomaxprocs=0):
 
 ycsb_dir = "."
 
-# kvname = redis|gokv; workload file just has configuration info, not workload info.
+# workload file just has configuration info, not workload info.
 def ycsb_one(kvname:str, runtime:int, target_rps:int, threads:int, valuesize:int, readprop:float, updateprop):
     # want it to take N seconds; want to give (target_time * target_rps) operations
     p = start_command(['go', 'run',
@@ -79,7 +76,7 @@ def ycsb_one(kvname:str, runtime:int, target_rps:int, threads:int, valuesize:int
                        '-p', 'requestdistribution=uniform',
                        '-p', 'readproportion=' + str(readprop),
                        '-p', 'updateproportion=' + str(updateprop),
-                       ], gomaxprocs=25)
+                       ], gomaxprocs=client_threads)
 
     if p is None:
         return ''
