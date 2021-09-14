@@ -116,7 +116,6 @@ def parse_ycsb_output(output):
         a[m.group('opname').strip()] = {'thruput': float(m.group('ops')), 'avg_latency': float(m.group('avg_latency')), 'raw': output}
     return a
 
-
 def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
     """
     Returns a dictionary of the form
@@ -155,6 +154,7 @@ def main():
     goycsbdir = os.path.dirname(os.path.abspath(__file__))
     gokvdir = os.path.join(os.path.dirname(goycsbdir), "gokv")
     os.makedirs(global_args.outdir, exist_ok=True)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
 
     # Profile for 1 core
     start_memkv_multiserver([range(1)])

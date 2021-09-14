@@ -161,7 +161,7 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt
         threads = 2*low
         if high > 0:
             if (high - low) < 4:
-                return peak_thruput
+                return threads, peak_thruput
             threads = int((low + high)/2)
 
         # FIXME: increase time
@@ -186,14 +186,15 @@ def main():
     goycsbdir = os.path.dirname(os.path.abspath(__file__))
     gokvdir = os.path.join(os.path.dirname(goycsbdir), "gokv")
     os.makedirs(global_args.outdir, exist_ok=True)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
 
     for config in peak_config.configs:
         time.sleep(0.5)
         ps = start_memkv_multiserver(config['srvs'])
         time.sleep(0.5)
-        peak = find_peak_thruput('memkv', 128, 'memkv_peak_raw.jsons', 0.95, 0.05, config['clnts'])
+        threads, peak = find_peak_thruput('memkv', 128, 'memkv_peak_raw.jsons', 0.95, 0.05, config['clnts'])
         with open(path.join(global_args.outdir, 'memkv_peaks.jsons'), 'a+') as outfile:
-            outfile.write(json.dumps({'name': config['name'], 'thruput':peak }) + '\n')
+            outfile.write(json.dumps({'name': config['name'], 'thruput':peak, 'clntthreads':threads }) + '\n')
 
         cleanup_procs()
 
