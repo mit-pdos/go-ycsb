@@ -123,6 +123,7 @@ def profile_goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float
     { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
     """
 
+    warmup_time = 10
     c = ",".join([str(j) for j in bench_cores])
     p = start_command(many_cores(['go', 'run',
                                   path.join(goycsbdir, './cmd/go-ycsb'),
@@ -137,15 +138,15 @@ def profile_goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
                                   '-p', 'memkv.coord=127.0.0.1:12200',
-                                  '-p', 'warmup=10', # TODO: increase warmup
+                                  '-p', 'warmup=' + str(warmup_time), # TODO: increase warmup
                                   ], c), cwd=goycsbdir)
     if p is None:
         return ''
 
-    run_command(["wget", "-O", "prof.out", "http://localhost:6060/debug/pprof/trace?seconds=5"])
+    time.sleep(warmup_time + 3)
+    run_command(["wget", "-O", "prof.out", "http://localhost:6060/debug/pprof/trace?seconds=60"])
     p.stdout.close()
     p.terminate()
-    return parse_ycsb_output(ret)
 
 def main():
     atexit.register(cleanup_procs)
@@ -156,13 +157,13 @@ def main():
     os.makedirs(global_args.outdir, exist_ok=True)
 
     # Profile for 1 core
-    start_memkv_multiserver([[range(1)]])
+    start_memkv_multiserver([range(1)])
     time.sleep(1.0)
     profile_goycsb_bench(50, 10, 128, 0.95, 0.05, range(40,80))
     cleanup_procs()
 
     # Profile for 10 cores
-    start_memkv_multiserver([[range(10)]])
+    start_memkv_multiserver([range(10)])
     time.sleep(1.0)
     profile_goycsb_bench(500, 10, 128, 0.95, 0.05, range(40,80))
     cleanup_procs()
