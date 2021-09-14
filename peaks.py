@@ -161,7 +161,8 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt
                 return peak_thruput
             threads = int((low + high)/2)
 
-        a = goycsb_bench(threads, 50, 128, readprop, updateprop, clnt_cores)
+        # FIXME: increase time
+        a = goycsb_bench(threads, 10, 128, readprop, updateprop, clnt_cores)
         p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
 
         with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
