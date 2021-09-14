@@ -208,7 +208,7 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt
         if thput > peak_thruput:
             low = threads
             peak_thruput = thput
-        elif thput < peak_thruput * 0.95: # XXX: 0.95 is the margin for error in being certain that perf is going down
+        else: # XXX: the thput might be barely smalle than peak_thruput, in which case maybe we should keep increasing # of threads
             high = threads
     return -1
 
