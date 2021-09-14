@@ -36,7 +36,7 @@ require (
 	github.com/magiconair/properties v1.8.5
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/mit-pdos/gokv v0.0.0-20210914042901-88077dfe80b6
+	github.com/mit-pdos/gokv v0.0.0-20210914185913-c6dbff529ac6
 	github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pingcap/errors v0.11.1

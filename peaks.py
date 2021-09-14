@@ -91,8 +91,9 @@ def start_memkv_multiserver(config:list[list[int]]):
 
     for i, corelist in enumerate(config):
         start_shard_multicore(12300 + i, corelist, i == 0)
-        time.sleep(0.3)
-        run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
+        time.sleep(1.0)
+        if i > 0:
+            run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
     print("[INFO] Started kv service with {0} server(s)".format(len(config)))
 
 def start_shard_multicore(port:int, corelist:list[int], init:bool):
@@ -152,9 +153,41 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
     p.terminate()
     return parse_ycsb_output(ret)
 
+def find_peak_thruput2(kvname, valuesize, outfilename, readprop, updateprop, clnt_cores):
+    peak_thruput = 0
+    low = 1
+    cur = 1
+    high = -1
+
+    # Find range of size b^n for optimal # of threads
+    # Then, within the range, find the subrange of size b^(n-1)
+    # Keep going until some desired accuracy (e.g. 10 threads).
+    n = 3
+    b = 10
+    low = 1
+    high = -1
+    threads = 1
+    while True:
+        # FIXME: increase time
+        a = goycsb_bench(threads, 10, 128, readprop, updateprop, clnt_cores)
+        p = {'service': kvname, 'num_threads': threads, 'lts': a}
+        with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
+            outfile.write(json.dumps(p) + '\n')
+
+        thput = sum([ a[op]['thruput'] for op in a ])
+        if thput > peak_thruput:
+            low = threads
+            peak_thruput = thput
+        elif thput < peak_thruput * 0.95: # XXX: 0.95 is the margin for error in being certain that perf is going down
+            high = threads
+
+        threads += (b**n)
+    return -1
+
 def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt_cores):
     peak_thruput = 0
     low = 1
+    cur = 1
     high = -1
 
     while True:
@@ -175,7 +208,7 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt
         if thput > peak_thruput:
             low = threads
             peak_thruput = thput
-        else:
+        elif thput < peak_thruput * 0.95: # XXX: 0.95 is the margin for error in being certain that perf is going down
             high = threads
     return -1
 

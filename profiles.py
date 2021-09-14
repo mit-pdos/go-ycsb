@@ -165,7 +165,7 @@ def main():
     # Profile for 10 cores
     start_memkv_multiserver([range(10)])
     time.sleep(1.0)
-    profile_goycsb_bench("prof10c.out", 100, 10, 128, 0.95, 0.05, range(40,80))
+    profile_goycsb_bench("prof10c.out", 500, 10, 128, 0.95, 0.05, range(40,80))
     cleanup_procs()
 
 if __name__=='__main__':
