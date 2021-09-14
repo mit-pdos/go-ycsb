@@ -227,6 +227,8 @@ github.com/mit-pdos/gokv v0.0.0-20210914025917-c407acc06df7 h1:ld6YvMpht2nyqBdlE
 github.com/mit-pdos/gokv v0.0.0-20210914025917-c407acc06df7/go.mod h1:hnIfuWi2yC3OEwG0tBhKqePslTI27zvOOtx3YsO09RY=
 github.com/mit-pdos/gokv v0.0.0-20210914035643-49f64dc4c4c3 h1:WpyZXKQ0EenZSVVBWChkZEDcx7mCGUVISxkATj35EFw=
 github.com/mit-pdos/gokv v0.0.0-20210914035643-49f64dc4c4c3/go.mod h1:hnIfuWi2yC3OEwG0tBhKqePslTI27zvOOtx3YsO09RY=
+github.com/mit-pdos/gokv v0.0.0-20210914042901-88077dfe80b6 h1:GQ8OKEDw4VckNSx/p7pK9/Sq0J4c2Nz/ZD3qkzYioVw=
+github.com/mit-pdos/gokv v0.0.0-20210914042901-88077dfe80b6/go.mod h1:hnIfuWi2yC3OEwG0tBhKqePslTI27zvOOtx3YsO09RY=
 github.com/mit-pdos/goose-nfsd v0.0.0-20210314175046-2ab6d49307fb/go.mod h1:twTpJ5VWh2M6W9i00jgxuTqMwL+uAoMEpDChT05RMtk=
 github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f h1:F9UeKkQo+jNnTU4zoIm74gxaXmTfm1o2YYYQxCWfeck=
 github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f/go.mod h1:dDhQ55VvlWB2IUW84QMXnvtDNqKgWek2VKpsiRO9w1k=
