@@ -138,7 +138,7 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
                                   '-p', 'memkv.coord=127.0.0.1:12200',
-                                  '-p', 'warmup=10', # TODO: increase warmup
+                                  '-p', 'warmup=20', # TODO: increase warmup
                                   ], c), cwd=goycsbdir)
 
     if p is None:
@@ -169,7 +169,8 @@ def find_peak_thruput2(kvname, valuesize, outfilename, readprop, updateprop, cln
     threads = 1
     while True:
         # FIXME: increase time
-        a = goycsb_bench(threads, 10, 128, readprop, updateprop, clnt_cores)
+        a = goycsb_bench(threads, 60, 128, readprop, updateprop, clnt_cores)
+
         p = {'service': kvname, 'num_threads': threads, 'lts': a}
         with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
             outfile.write(json.dumps(p) + '\n')
