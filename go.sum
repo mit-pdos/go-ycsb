@@ -160,6 +160,9 @@ github.com/goose-lang/std v0.0.0-20210616151536-8980ecb5cb34 h1:3dEwFUpaXe985ba6
 github.com/goose-lang/std v0.0.0-20210616151536-8980ecb5cb34/go.mod h1:D4Gu/HWbsKPs/LleUUgK1fYm2h4SmiTZ+jMvb1zse98=
 github.com/goose-lang/std v0.0.0-20210616153105-a3b6306975d6 h1:xPQ3bgkCCKk+Vm7hNf4qph6zeH5x8Mu3yxZxRcYNTa4=
 github.com/goose-lang/std v0.0.0-20210616153105-a3b6306975d6/go.mod h1:eBTA88cbxhdegtDJayt+ns0Y9jjXsAwxv3CbH+62cKE=
+github.com/goose-lang/std v0.0.0-20210910014833-f03ef806fb85/go.mod h1:eBTA88cbxhdegtDJayt+ns0Y9jjXsAwxv3CbH+62cKE=
+github.com/goose-lang/std v0.0.0-20210910024443-21c4593d3dec h1:RPpr81rPdqG1OW7cFx+e0Wb5o4gDavB7D31eXENbKQU=
+github.com/goose-lang/std v0.0.0-20210910024443-21c4593d3dec/go.mod h1:eBTA88cbxhdegtDJayt+ns0Y9jjXsAwxv3CbH+62cKE=
 github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1 h1:EGx4pi6eqNxGaHF6qqu48+N2wcFQ5qg5FXgOdqsJ5d8=
 github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/gorilla/mux v1.7.0 h1:tOSd0UKHQd6urX6ApfOn4XdBMY6Sh1MfxV3kmaazO+U=
@@ -218,6 +221,12 @@ github.com/mit-pdos/gokv v0.0.0-20210621135116-5998e31e5629 h1:BKKBb/UlhWQAwp8fe
 github.com/mit-pdos/gokv v0.0.0-20210621135116-5998e31e5629/go.mod h1:Ehx4lT5ZLJ6tJOQI/nDPsxtKdQipDNLJ4njiZmYlHFE=
 github.com/mit-pdos/gokv v0.0.0-20210629010648-6a3026e645ac h1:E6HuBXFeHoZgj2jrm3yZ7H/7UiSJ+rNFDT9PaYTa44g=
 github.com/mit-pdos/gokv v0.0.0-20210629010648-6a3026e645ac/go.mod h1:egFoBwD2jx9QTu9Z5jENxMAR6INQn7JAtaGcT+SCyFk=
+github.com/mit-pdos/gokv v0.0.0-20210914022000-ed89bf80770c h1:tzzFpk61RS7108mJCNzf6mN5g/u4rjQd7Y+IVPdjzLc=
+github.com/mit-pdos/gokv v0.0.0-20210914022000-ed89bf80770c/go.mod h1:hnIfuWi2yC3OEwG0tBhKqePslTI27zvOOtx3YsO09RY=
+github.com/mit-pdos/gokv v0.0.0-20210914025917-c407acc06df7 h1:ld6YvMpht2nyqBdlEwHiZqrihIxsGcdr+U4ahOVTqYI=
+github.com/mit-pdos/gokv v0.0.0-20210914025917-c407acc06df7/go.mod h1:hnIfuWi2yC3OEwG0tBhKqePslTI27zvOOtx3YsO09RY=
+github.com/mit-pdos/gokv v0.0.0-20210914035643-49f64dc4c4c3 h1:WpyZXKQ0EenZSVVBWChkZEDcx7mCGUVISxkATj35EFw=
+github.com/mit-pdos/gokv v0.0.0-20210914035643-49f64dc4c4c3/go.mod h1:hnIfuWi2yC3OEwG0tBhKqePslTI27zvOOtx3YsO09RY=
 github.com/mit-pdos/goose-nfsd v0.0.0-20210314175046-2ab6d49307fb/go.mod h1:twTpJ5VWh2M6W9i00jgxuTqMwL+uAoMEpDChT05RMtk=
 github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f h1:F9UeKkQo+jNnTU4zoIm74gxaXmTfm1o2YYYQxCWfeck=
 github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f/go.mod h1:dDhQ55VvlWB2IUW84QMXnvtDNqKgWek2VKpsiRO9w1k=

@@ -6,15 +6,15 @@ import (
 
 	kv "github.com/mit-pdos/gokv/memkv"
 	"github.com/mit-pdos/gokv/grove_ffi"
-	"github.com/mit-pdos/gokv/bench"
 	"github.com/magiconair/properties"
 	// "github.com/pingcap/go-ycsb/pkg/prop"
 	// "github.com/pingcap/go-ycsb/pkg/util"
 	"github.com/pingcap/go-ycsb/pkg/ycsb"
+	"github.com/mit-pdos/gokv/connman"
 )
 
 type kvDB struct {
-	cl *bench.KVClerkPool
+	cl *kv.KVClerk
 }
 
 func (g *kvDB) Read(ctx context.Context, table string, key string, fields []string) (map[string][]byte, error) {
@@ -81,9 +81,7 @@ type kvCreator struct{}
 
 func (r kvCreator) Create(p *properties.Properties) (ycsb.DB, error) {
 	// cl := kv.MakeKVClerkPool(1, uint64(p.GetInt(memkvNumClients, 100)))
-	cl := bench.MakeKVClerkPool(1, 0, func() bench.KVClerk {
-		return kv.MakeMemKVClerk(grove_ffi.MakeAddress(p.GetString(memkvCoord, "")))
-	})
+	cl := kv.MakeKVClerk(grove_ffi.MakeAddress(p.GetString(memkvCoord, "")), connman.MakeConnMan())
 	return &kvDB{cl}, nil
 }
 

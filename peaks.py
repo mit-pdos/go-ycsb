@@ -134,7 +134,7 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
                                   '-p', 'memkv.coord=127.0.0.1:12200',
-                                  '-p', 'warmup=1', # TODO: increase warmup
+                                  '-p', 'warmup=10', # TODO: increase warmup
                                   ], c), cwd=goycsbdir)
 
     if p is None:
@@ -149,7 +149,7 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
     p.terminate()
     return parse_ycsb_output(ret)
 
-def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop):
+def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt_cores):
     peak_thruput = 0
     low = 1
     high = -1
@@ -161,14 +161,13 @@ def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop):
                 return peak_thruput
             threads = int((low + high)/2)
 
-        a = goycsb_bench(threads, 1, 128, readprop, updateprop, range(0,2))
+        a = goycsb_bench(threads, 50, 128, readprop, updateprop, clnt_cores)
         p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
 
         with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
             outfile.write(json.dumps(p) + '\n')
 
         thput = sum([ a[op]['thruput'] for op in a ])
-        return thput # FIXME: get rid of this
         if thput > peak_thruput:
             low = threads
             peak_thruput = thput
@@ -188,7 +187,7 @@ def main():
         time.sleep(0.5)
         ps = start_memkv_multiserver(config['srvs'])
         time.sleep(0.5)
-        peak = find_peak_thruput('memkv', 128, 'memkv_peak_raw.jsons', 0.95, 0.05)
+        peak = find_peak_thruput('memkv', 128, 'memkv_peak_raw.jsons', 0.95, 0.05, config['clnts'])
         with open(path.join(global_args.outdir, 'memkv_peaks.jsons'), 'a+') as outfile:
             outfile.write(json.dumps({'name': config['name'], 'thruput':peak }) + '\n')
 
