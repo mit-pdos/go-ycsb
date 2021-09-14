@@ -117,7 +117,7 @@ def parse_ycsb_output(output):
     return a
 
 
-def profile_goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
+def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
     """
     Returns a dictionary of the form
     { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
@@ -144,7 +144,7 @@ def profile_goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float
         return ''
 
     time.sleep(warmup_time + 3)
-    run_command(["wget", "-O", "prof.out", "http://localhost:6060/debug/pprof/trace?seconds=60"])
+    run_command(["wget", "-O", prof_name, "http://localhost:6060/debug/pprof/profile?seconds=60"])
     p.stdout.close()
     p.terminate()
 
@@ -159,13 +159,13 @@ def main():
     # Profile for 1 core
     start_memkv_multiserver([range(1)])
     time.sleep(1.0)
-    profile_goycsb_bench(50, 10, 128, 0.95, 0.05, range(40,80))
+    profile_goycsb_bench("prof1c.out", 50, 10, 128, 0.95, 0.05, range(40,80))
     cleanup_procs()
 
     # Profile for 10 cores
     start_memkv_multiserver([range(10)])
     time.sleep(1.0)
-    profile_goycsb_bench(500, 10, 128, 0.95, 0.05, range(40,80))
+    profile_goycsb_bench("prof10c.out", 100, 10, 128, 0.95, 0.05, range(40,80))
     cleanup_procs()
 
 if __name__=='__main__':
