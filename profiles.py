@@ -117,7 +117,7 @@ def parse_ycsb_output(output):
     return a
 
 
-def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
+def profile_goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
     """
     Returns a dictionary of the form
     { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
@@ -139,45 +139,13 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
                                   '-p', 'memkv.coord=127.0.0.1:12200',
                                   '-p', 'warmup=10', # TODO: increase warmup
                                   ], c), cwd=goycsbdir)
-
     if p is None:
         return ''
 
-    ret = ''
-    for stdout_line in iter(p.stdout.readline, ""):
-        if stdout_line.find('Takes(s): {0}.'.format(runtime)) != -1:
-            ret = stdout_line
-            break
+    run_command(["wget", "-O", "prof.out", "http://localhost:6060/debug/pprof/trace?seconds=5"])
     p.stdout.close()
     p.terminate()
     return parse_ycsb_output(ret)
-
-def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, clnt_cores):
-    peak_thruput = 0
-    low = 1
-    high = -1
-
-    while True:
-        threads = 2*low
-        if high > 0:
-            if (high - low) < 4:
-                return peak_thruput
-            threads = int((low + high)/2)
-
-        # FIXME: increase time
-        a = goycsb_bench(threads, 10, 128, readprop, updateprop, clnt_cores)
-        p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
-
-        with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
-            outfile.write(json.dumps(p) + '\n')
-
-        thput = sum([ a[op]['thruput'] for op in a ])
-        if thput > peak_thruput:
-            low = threads
-            peak_thruput = thput
-        else:
-            high = threads
-    return -1
 
 def main():
     atexit.register(cleanup_procs)
@@ -187,15 +155,17 @@ def main():
     gokvdir = os.path.join(os.path.dirname(goycsbdir), "gokv")
     os.makedirs(global_args.outdir, exist_ok=True)
 
-    for config in peak_config.configs:
-        time.sleep(0.5)
-        ps = start_memkv_multiserver(config['srvs'])
-        time.sleep(0.5)
-        peak = find_peak_thruput('memkv', 128, 'memkv_peak_raw.jsons', 0.95, 0.05, config['clnts'])
-        with open(path.join(global_args.outdir, 'memkv_peaks.jsons'), 'a+') as outfile:
-            outfile.write(json.dumps({'name': config['name'], 'thruput':peak }) + '\n')
+    # Profile for 1 core
+    start_memkv_multiserver([[range(1)]])
+    time.sleep(1.0)
+    profile_goycsb_bench(50, 10, 128, 0.95, 0.05, range(40,80))
+    cleanup_procs()
 
-        cleanup_procs()
+    # Profile for 10 cores
+    start_memkv_multiserver([[range(10)]])
+    time.sleep(1.0)
+    profile_goycsb_bench(500, 10, 128, 0.95, 0.05, range(40,80))
+    cleanup_procs()
 
 if __name__=='__main__':
     main()
