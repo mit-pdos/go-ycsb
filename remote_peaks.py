@@ -99,7 +99,7 @@ def install_shard_remote(host:str):
 def start_remote_shard_server(host:str, port:int, corelist:list[int], init:bool):
     c = ",".join([str(j) for j in corelist])
     start_remote_command(host, "sleep 10 && echo test")
-    start_remote_command(host, "numactl -C " + c + " ~/go/bin/memkvshard -port " + str(port) + (init * " -init"))
+    start_remote_command(host, "ulimit -n 100000; numactl -C " + c + " ~/go/bin/memkvshard -port " + str(port) + (init * " -init") + " > /dev/null")
     # XXX: add check to see if it's running
     print("[INFO] Started a remote shard server with {0} cores at {1}:{2}".format(len(corelist), host, port))
 
@@ -133,7 +133,7 @@ def goycsb_bench(coord:str, threads:int, runtime:int, valuesize:int, readprop:fl
                                   '-P', path.join('../gokv/bench/memkv_workload'),
                                   '--threads', str(threads),
                                   '--target', '-1',
-                                  '--interval', '1',
+                                  '--interval', '1000',
                                   '-p', 'operationcount=' + str(2**32 - 1),
                                   '-p', 'fieldlength=' + str(valuesize),
                                   '-p', 'requestdistribution=uniform',
@@ -198,9 +198,9 @@ def main():
     stop_remote_shard_server(r)
     start_remote_shard_server(r, 12300, range(1), True)
 
-    threads, peak = find_peak_thruput(128, 'memkv_peak_raw.jsons', 0.95, 0.05, range(1,4))
+    threads, peak = find_peak_thruput(128, 'memkv_peak_raw.jsons', 0.95, 0.05, range(40,80))
     with open(path.join(global_args.outdir, 'memkv_peaks.jsons'), 'a+') as outfile:
-        outfile.write(json.dumps({'name': config['name'], 'thruput':peak, 'clntthreads':threads }) + '\n')
+        outfile.write(json.dumps({'name': "pd7_1c", 'thruput':peak, 'clntthreads':threads }) + '\n')
 
     cleanup_procs()
 
