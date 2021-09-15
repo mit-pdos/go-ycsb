@@ -14,7 +14,7 @@ import signal
 import peak_config
 
 parser = argparse.ArgumentParser(
-description="Find peak throughput of KV service for a varying number of shard servers"
+description="Find peak throughput of KV service for a varying number of shard servers running remotely"
 )
 parser.add_argument(
     "-n",
@@ -52,6 +52,9 @@ def run_command(args, cwd=None):
     if not global_args.dry_run:
         return subprocess.run(args, capture_output=True, text=True, cwd=cwd)
 
+def run_remote_command(host:str, cmd:str, cwd=None):
+    run_command(["ssh", host, '"' + cmd + '"'])
+
 def start_command(args, cwd=None):
     if global_args.dry_run or global_args.verbose:
         print("[STARTING] " + " ".join(args))
@@ -80,28 +83,24 @@ def one_core(args, c):
     return ["numactl", "-C", str(c)] + args
 
 # Starts server on port 12345
-def start_memkv_multiserver(config:list[list[int]]):
-    """
-    Given a list of lists of cores for each shard server, this brings up the kv
-    system
-    """
+def start_memkv_coord(initsrv):
     start_command(["go", "run",
-                   "./cmd/memkvcoord", "-init",
-                   "127.0.0.1:12300", "-port", "12200"], cwd=gokvdir)
+                   "./cmd/memkvcoord", "-init", initsrv,
+                   "-port", "12200"], cwd=gokvdir)
+    print("[INFO] Started kv coordinator")
 
-    for i, corelist in enumerate(config):
-        start_shard_multicore(12300 + i, corelist, i == 0)
-        time.sleep(0.3)
-        run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
-    print("[INFO] Started kv service with {0} server(s)".format(len(config)))
+def install_shard_remote(host:str):
+    # XXX: make sure it's as up-to-date as possible
+    run_remote_command(host, "go install github.com/mit-pdos/gokv/cmd/memkvshard@latest")
 
-def start_shard_multicore(port:int, corelist:list[int], init:bool):
+def start_remote_shard_server(host:str, port:int, corelist:list[int], init:bool):
     c = ",".join([str(j) for j in corelist])
-    if init:
-        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(port)], c), cwd=gokvdir)
-    else:
-        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-port", str(port)], c), cwd=gokvdir)
-    print("[INFO] Started a shard server with {0} cores on port {1}".format(len(corelist), port))
+    run_remote_command(host, "nohup numactl" + c + "~/go/bin/memkvshard -port " + str(port) + (init * " -init"))
+    # XXX: add check to see if it's running
+    print("[INFO] Started a remote shard server with {0} cores at {1}:{2}".format(len(corelist), host, port))
+
+def stop_remote_shard_server(host:str):
+    run_remote_command(host, "killall memkvshard")
 
 def parse_ycsb_output(output):
     # look for 'Run finished, takes...', then parse the lines for each of the operations
@@ -116,13 +115,13 @@ def parse_ycsb_output(output):
         a[m.group('opname').strip()] = {'thruput': float(m.group('ops')), 'avg_latency': float(m.group('avg_latency')), 'raw': output}
     return a
 
-def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
+
+def goycsb_bench(coord:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
     """
     Returns a dictionary of the form
     { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
     """
 
-    warmup_time = 10
     c = ",".join([str(j) for j in bench_cores])
     p = start_command(many_cores(['go', 'run',
                                   path.join(goycsbdir, './cmd/go-ycsb'),
@@ -136,46 +135,49 @@ def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int,
                                   '-p', 'requestdistribution=uniform',
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
-                                  '-p', 'memkv.coord=127.0.0.1:12200',
-                                  '-p', 'warmup=' + str(warmup_time), # TODO: increase warmup
+                                  '-p', 'memkv.coord=' + coord,
+                                  '-p', 'warmup=20', # TODO: increase warmup
                                   ], c), cwd=goycsbdir)
+
     if p is None:
         return ''
 
-    time.sleep(warmup_time + 3)
-    run_command(["wget", "-O", prof_name, "http://localhost:6060/debug/pprof/profile?seconds=60"])
+    ret = ''
+    for stdout_line in iter(p.stdout.readline, ""):
+        if stdout_line.find('Takes(s): {0}.'.format(runtime)) != -1:
+            ret = stdout_line
+            break
     p.stdout.close()
     p.terminate()
+    return parse_ycsb_output(ret)
 
-def forever_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
-    """
-    Returns a dictionary of the form
-    { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
-    """
+def find_peak_thruput(valuesize, outfilename, readprop, updateprop, clnt_cores):
+    peak_thruput = 0
+    low = 1
+    cur = 1
+    high = -1
 
-    warmup_time = 10
-    c = ",".join([str(j) for j in bench_cores])
-    p = start_command(many_cores(['go', 'run',
-                                  path.join(goycsbdir, './cmd/go-ycsb'),
-                                  'run', 'memkv',
-                                  '-P', path.join('../gokv/bench/memkv_workload'),
-                                  '--threads', str(threads),
-                                  '--target', '-1',
-                                  '--interval', '1',
-                                  '-p', 'operationcount=' + str(2**32 - 1),
-                                  '-p', 'fieldlength=' + str(valuesize),
-                                  '-p', 'requestdistribution=uniform',
-                                  '-p', 'readproportion=' + str(readprop),
-                                  '-p', 'updateproportion=' + str(updateprop),
-                                  '-p', 'memkv.coord=127.0.0.1:12200',
-                                  '-p', 'warmup=' + str(warmup_time), # TODO: increase warmup
-                                  ], c), cwd=goycsbdir)
-    if p is None:
-        return ''
+    while True:
+        threads = 2*low
+        if high > 0:
+            if (high - low) < 4:
+                return threads, peak_thruput
+            threads = int((low + high)/2)
 
-    time.sleep(1000000)
-    p.stdout.close()
-    p.terminate()
+        # FIXME: increase time
+        a = goycsb_bench('127.0.0.1:12200', threads, 10, 128, readprop, updateprop, clnt_cores)
+        p = {'service': 'memkv', 'num_threads': threads, 'ratelimit': -1, 'lts': a}
+
+        with open(path.join(global_args.outdir, outfilename), 'a+') as outfile:
+            outfile.write(json.dumps(p) + '\n')
+
+        thput = sum([ a[op]['thruput'] for op in a ])
+        if thput > peak_thruput:
+            low = threads
+            peak_thruput = thput
+        else: # XXX: the thput might be barely smalle than peak_thruput, in which case maybe we should keep increasing # of threads
+            high = threads
+    return -1
 
 def main():
     atexit.register(cleanup_procs)
@@ -186,16 +188,17 @@ def main():
     os.makedirs(global_args.outdir, exist_ok=True)
     resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
 
-    # Profile for 1 core
-    start_memkv_multiserver([range(1)])
-    time.sleep(1.0)
-    profile_goycsb_bench("prof1c.out", 50, 10, 128, 0.95, 0.05, range(40,80))
-    cleanup_procs()
+    rh = 'pd7.csail.mit.edu'
+    r = '18.26.5.7' # pd7
+    install_shard_remote(rh)
+    start_memkv_coord(r + ':12300')
+    stop_remote_shard_server(rh)
+    start_remote_shard_server(rh, 12300, range(1), True)
 
-    # Profile for 10 cores
-    start_memkv_multiserver([range(10)])
-    time.sleep(1.0)
-    profile_goycsb_bench("prof10c.out", 500, 10, 128, 0.95, 0.05, range(40,80))
+    threads, peak = find_peak_thruput(128, 'memkv_peak_raw.jsons', 0.95, 0.05, range(1,4))
+    with open(path.join(global_args.outdir, 'memkv_peaks.jsons'), 'a+') as outfile:
+        outfile.write(json.dumps({'name': config['name'], 'thruput':peak, 'clntthreads':threads }) + '\n')
+
     cleanup_procs()
 
 if __name__=='__main__':
