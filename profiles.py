@@ -46,7 +46,7 @@ goycsbdir = ''
 
 procs = []
 
-def run_command(args, cwd=None):
+def run_command(args, cwd=None, stdout=None):
     if global_args.dry_run or global_args.verbose:
         print("[RUNNING] " + " ".join(args))
     if not global_args.dry_run:
@@ -89,18 +89,21 @@ def start_memkv_multiserver(config:list[list[int]]):
                    "./cmd/memkvcoord", "-init",
                    "127.0.0.1:12300", "-port", "12200"], cwd=gokvdir)
 
+    run_command(["go", "build", "./cmd/memkvshard"], cwd=gokvdir)
+
     for i, corelist in enumerate(config):
         start_shard_multicore(12300 + i, corelist, i == 0)
-        time.sleep(0.3)
-        run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
+        if i > 0:
+            time.sleep(1.0)
+            run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
     print("[INFO] Started kv service with {0} server(s)".format(len(config)))
 
 def start_shard_multicore(port:int, corelist:list[int], init:bool):
     c = ",".join([str(j) for j in corelist])
     if init:
-        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(port)], c), cwd=gokvdir)
+        start_command(many_cores(["./memkvshard", "-init", "-port", str(port)], c), cwd=gokvdir)
     else:
-        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-port", str(port)], c), cwd=gokvdir)
+        start_command(many_cores(["./memkvshard", "-port", str(port)], c), cwd=gokvdir)
     print("[INFO] Started a shard server with {0} cores on port {1}".format(len(corelist), port))
 
 def parse_ycsb_output(output):
@@ -116,7 +119,7 @@ def parse_ycsb_output(output):
         a[m.group('opname').strip()] = {'thruput': float(m.group('ops')), 'avg_latency': float(m.group('avg_latency')), 'raw': output}
     return a
 
-def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
+def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int], srvcore:int):
     """
     Returns a dictionary of the form
     { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
@@ -143,7 +146,13 @@ def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int,
         return ''
 
     time.sleep(warmup_time + 3)
-    run_command(["wget", "-O", prof_name, "http://localhost:6060/debug/pprof/profile?seconds=60"])
+    # c = ",".join([str(j) for j in srvcores])
+    c = str(srvcore)
+    profp = run_command(["sudo", "/usr/share/bcc/tools/profile", "-F", "99", "-C", c, "-df", "--stack-storage-size", "32768", str(runtime)])
+    with open(path.join(global_args.outdir, prof_name), 'w') as outfile:
+        print(profp.stderr)
+        outfile.write(profp.stdout)
+
     p.stdout.close()
     p.terminate()
 
@@ -187,15 +196,17 @@ def main():
     resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
 
     # Profile for 1 core
-    start_memkv_multiserver([range(1)])
+    srvcore = range(1)
+    start_memkv_multiserver([srvcore])
     time.sleep(1.0)
-    profile_goycsb_bench("prof1c.out", 50, 10, 128, 0.95, 0.05, range(40,80))
+    profile_goycsb_bench("prof1c.prof", 200, 60, 128, 0.95, 0.05, range(40,80), srvcore[0])
     cleanup_procs()
 
     # Profile for 10 cores
-    start_memkv_multiserver([range(10)])
+    srvcore = range(10)
+    start_memkv_multiserver([srvcore])
     time.sleep(1.0)
-    profile_goycsb_bench("prof10c.out", 500, 10, 128, 0.95, 0.05, range(40,80))
+    profile_goycsb_bench("prof10c.prof", 2000, 60, 128, 0.95, 0.05, range(40,80), srvcore[0])
     cleanup_procs()
 
 if __name__=='__main__':
