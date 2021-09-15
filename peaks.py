@@ -11,7 +11,7 @@ import time
 import atexit
 import signal
 
-import peak_config
+from peak_config import *
 
 parser = argparse.ArgumentParser(
 description="Find peak throughput of KV service for a varying number of shard servers"

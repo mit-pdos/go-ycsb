@@ -7,9 +7,14 @@ import json
 import os
 import resource
 import itertools
+import time
+import atexit
+import signal
+
+from latency_config import *
 
 parser = argparse.ArgumentParser(
-description="Run benchmarks on kv services and generate latency-throughput graphs"
+description="Find peak throughput of KV service for a varying number of shard servers"
 )
 parser.add_argument(
     "-n",
@@ -29,69 +34,78 @@ parser.add_argument(
     required=True,
     default=None,
 )
-# subparsers = parser.add_subparsers(dest="command")
-# run_parser = subparsers.add_parser('run')
 parser.add_argument(
-    "system",
-    help="memkv|redis",
+    "-e",
+    "--errors",
+    help="print stderr from commands being run",
+    action="store_true",
 )
-
-parser.add_argument(
-    "nshard",
-    help="Number of shards in system",
-)
-
-parser.add_argument(
-    "workload",
-    help="update|read|both",
-)
-
 global_args = parser.parse_args()
+gokvdir = ''
+goycsbdir = ''
 
-def run_command(args):
+procs = []
+
+def run_command(args, cwd=None):
     if global_args.dry_run or global_args.verbose:
         print("[RUNNING] " + " ".join(args))
     if not global_args.dry_run:
-        return subprocess.run(args, capture_output=True, text=True)
+        return subprocess.run(args, capture_output=True, text=True, cwd=cwd)
 
-def start_command(args):
+def start_command(args, cwd=None):
     if global_args.dry_run or global_args.verbose:
         print("[STARTING] " + " ".join(args))
     if not global_args.dry_run:
-        return subprocess.Popen(args, text=True, stdout=subprocess.PIPE)
+        e = subprocess.PIPE
+        if global_args.errors:
+            e = None
+        p = subprocess.Popen(args, text=True, stdout=subprocess.PIPE, stderr=e, cwd=cwd, preexec_fn=os.setsid)
+        global procs
+        procs.append(p)
+        return p
 
-ycsb_dir = "."
+def cleanup_procs():
+    global procs
+    for p in procs:
+        try:
+            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+        except Exception:
+            continue
+    procs = []
 
-# kvname = redis|gokv; workload file just has configuration info, not workload info.
-def ycsb_one(kvname:str, runtime:int, target_rps:int, threads:int, valuesize:int, readprop:float, updateprop):
-    # want it to take 10 seconds; want to give (target_time * target_rps) operations
-    p = start_command(['go', 'run',
-                       path.join(ycsb_dir, 'cmd/go-ycsb'),
-                       'run', kvname,
-                       '-P', path.join('bench', kvname + '_workload'),
-                       '--threads', str(threads),
-                       '--target', str(target_rps),
-                       '--interval', '1',
-                       '-p', 'operationcount=' + str(2**32 - 1),
-                       '-p', 'fieldlength=' + str(valuesize),
-                       '-p', 'requestdistribution=uniform',
-                       '-p', 'readproportion=' + str(readprop),
-                       '-p', 'updateproportion=' + str(updateprop),
-                       ])
+def many_cores(args, c):
+    return ["numactl", "-C", c] + args
 
-    if p is None:
-        return ''
+def one_core(args, c):
+    return ["numactl", "-C", str(c)] + args
 
-    ret = ''
-    for stdout_line in iter(p.stdout.readline, ""):
-        if stdout_line.find('Takes(s): 60.') != -1:
-            ret = stdout_line
-            break
-    p.stdout.close()
-    p.terminate()
+# Starts server on port 12345
+def start_memkv_multiserver(config:list[list[int]]):
+    """
+    Given a list of lists of cores for each shard server, this brings up the kv
+    system
+    """
+    start_command(["go", "run",
+                   "./cmd/memkvcoord", "-init",
+                   "127.0.0.1:12300", "-port", "12200"], cwd=gokvdir)
 
-    # if p and p.returncode != 0: print(p.stderr)
-    return ret
+    for i, corelist in enumerate(config):
+        start_shard_multicore(12300 + i, corelist, i == 0)
+        time.sleep(1.0)
+        if i > 0:
+            run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
+    print("[INFO] Started kv service with {0} server(s)".format(len(config)))
+
+def start_shard_multicore(port:int, corelist:list[int], init:bool):
+    c = ",".join([str(j) for j in corelist])
+    if init:
+        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-init", "-port", str(port)], c), cwd=gokvdir)
+    else:
+        start_command(many_cores(["go", "run", "./cmd/memkvshard", "-port", str(port)], c), cwd=gokvdir)
+    print("[INFO] Started a shard server with {0} cores on port {1}".format(len(corelist), port))
+
+def start_redis():
+    pass
 
 def parse_ycsb_output(output):
     # look for 'Run finished, takes...', then parse the lines for each of the operations
@@ -106,20 +120,50 @@ def parse_ycsb_output(output):
         a[m.group('opname').strip()] = {'thruput': float(m.group('ops')), 'avg_latency': float(m.group('avg_latency')), 'raw': output}
     return a
 
-def find_peak_throughput(kvname, valuesize):
-    # keep doubling number of threads until throughput gets saturated.
-    pass
 
-def num_threads(nshards):
-    def temp(i):
-        if i < 5:
-            return i + 1
-        else:
-            return nshards * (i - 4) * 5
-    return temp
+def goycsb_bench(kvname:int, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, keys:int, bench_cores:list[int]):
+    """
+    Returns a dictionary of the form
+    { 'UPDATE': {'thruput': 1000, 'avg_latency': 12345', 'raw': 'blah'},...}
+    """
 
-# TODO: ycsb_one should take a real-time parameter, and just kill the benchmark after that much time (post-warmup) has elapsed.
-def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
+    c = ",".join([str(j) for j in bench_cores])
+    p = start_command(many_cores(['go', 'run',
+                                  path.join(goycsbdir, './cmd/go-ycsb'),
+                                  'run', kvname,
+                                  '-P', path.join('../gokv/bench/memkv_workload'),
+                                  '--threads', str(threads),
+                                  '--target', '-1',
+                                  '--interval', '1',
+                                  '-p', 'operationcount=' + str(2**32 - 1),
+                                  '-p', 'fieldlength=' + str(valuesize),
+                                  '-p', 'requestdistribution=uniform',
+                                  '-p', 'readproportion=' + str(readprop),
+                                  '-p', 'updateproportion=' + str(updateprop),
+                                  '-p', 'memkv.coord=' + config['hosts'][kvname],
+                                  '-p', 'warmup=20', # TODO: increase warmup
+                                  '-p', 'recordcount', str(keys),
+                                  ], c), cwd=goycsbdir)
+
+    if p is None:
+        return ''
+
+    ret = ''
+    for stdout_line in iter(p.stdout.readline, ""):
+        if stdout_line.find('Takes(s): {0}.'.format(runtime)) != -1:
+            ret = stdout_line
+            break
+    p.stdout.close()
+    p.terminate()
+    return parse_ycsb_output(ret)
+
+def num_threads(i):
+    if i < 5:
+        return i + 1
+    else:
+        return (i - 4) * 5
+
+def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, recordcount, thread_fn, bench_cores):
     data = []
     i = 0
     last_good_index = 0
@@ -136,8 +180,8 @@ def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
         # another (probably better) option is to have no bound on the number of ops, and just kill the benchmark early after enough ops/time
         # pred_thruput = (last_thruput/last_threads) * threads
         # num_ops = int(pred_thruput * 5) # estimate enough operations for 10 seconds
-        a = parse_ycsb_output(ycsb_one(kvname, 10, -1, threads, valuesize, readprop, updateprop))
-        p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
+        a = goycsb_bench(kvname, threads, 10, valuesize, readprop, updateprop, recordcount, bench_cores)
+        p = {'service': kvname, 'num_threads': threads, 'lts': a}
 
         data = data + [ p ]
         with open(outfilename, 'a+') as outfile:
@@ -157,65 +201,22 @@ def closed_lt(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
 
     return data
 
-def find_peak_thruput(kvname, valuesize, outfilename, readprop, updateprop, thread_fn):
-    peak_thruput = 0
-    low = 1
-    high = -1
-
-    while True:
-        threads = 2*low
-        if high > 0:
-            if (high - low) < 10:
-                return peak_thruput
-            threads = int((low + high)/2)
-
-        a = parse_ycsb_output(ycsb_one(kvname, 10, -1, threads, valuesize, readprop, updateprop))
-        p = {'service': kvname, 'num_threads': threads, 'ratelimit': -1, 'lts': a}
-
-        with open(outfilename, 'a+') as outfile:
-            outfile.write(json.dumps(p) + '\n')
-
-        thput = sum([ a[op]['thruput'] for op in a ])
-        if thput > peak_thruput:
-            low = threads
-            peak_thruput = thput
-        else:
-            high = threads
-    return -1
-
-def generic_bench(s, readRatio, writeRatio, nshard):
-    closed_lt(s, 128, path.join(global_args.outdir, s + '_update_closed_lt.jsons'), readRatio, writeRatio, num_threads(nshard))
-
-def generic_peak(s, readRatio, writeRatio, nshard, outname):
-    find_peak_thruput(s, 128, path.join(global_args.outdir, outname), readRatio, writeRatio, num_threads(nshard))
-
-def get_peaks_all(s, outfilename):
-    # This will manage the shard servers on its own;
-    # It will start one shard server and one coordinator with 4 GOMAXPROCS each.
-    # It runs benchmarks until it finds the peak.
-    # Then, it adds a new shard server by via memkvctl, and continues.
-    max_srvs = 5
-    ps = []
-    ps.append(start_command(['memkvshard', '-init', '-port', '12300']))
-    ps.append(start_command(['memkvcoord', '-init', '127.0.0.1:12300', '-port', '12200']))
-    for i in range(1, max_srvs):
-        ps.append(start_command(['memkvshard', '-port', str(12300 + i)]))
-
-    for nshard in range(1, 1 + max_srvs): # max num of shard
-        if i > 1:
-            run_command(['memkvctl', '-coord', '127.0.0.1:12200', 'add', '127.0.0.1:' + str(12200 + i)])
-        p = generic_peak(s, 0.0, 1.0, nshard, s + '_peak_raw.jsons')
-        with open(outfilename, 'a+') as outfile:
-            outfile.write(json.dumps({'srvs':nshard, 'peak': p}) + '\n')
-
 def main():
+    atexit.register(cleanup_procs)
     resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
+    global gokvdir
+    global goycsbdir
     os.makedirs(global_args.outdir, exist_ok=True)
-    if global_args.workload == 'update':
-        generic_bench(global_args.system, 0.0, 1.0, int(global_args.nshard))
-    elif global_args.workload == 'peak':
-        p = generic_peak(global_args.system, 0.0, 1.0, int(global_args.nshard))
-        print("\n\nPeak throughput achieved was " + str(p))
+    goycsbdir = os.path.dirname(os.path.abspath(__file__))
+    gokvdir = os.path.join(os.path.dirname(goycsbdir), "gokv")
+    os.makedirs(global_args.outdir, exist_ok=True)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
+
+    # start_memkv_multiserver([[0]])
+    closed_lt('memkv', 128, path.join(global_args.outdir, 'memkv_closed_lt.jsons'), config['read'], config['write'], config['keys'], num_threads, config['benchcores'])
+
+    # start_redis()
+    closed_lt('rediskv', 128, path.join(global_args.outdir, 'redis_lt.jsons'), config['read'], config['write'], config['keysize'], num_threads, config['benchcores'])
 
 if __name__=='__main__':
     main()

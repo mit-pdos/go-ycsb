@@ -156,6 +156,12 @@ def profile_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int,
     p.stdout.close()
     p.terminate()
 
+    c = str(srvcore)
+    profp = run_command(["sudo", "/usr/share/bcc/tools/offcputime", "-p", "", "-df", "--stack-storage-size", "32768", str(runtime)])
+    with open(path.join(global_args.outdir, prof_name), 'w') as outfile:
+        print(profp.stderr)
+        outfile.write(profp.stdout)
+
 def forever_goycsb_bench(prof_name:str, threads:int, runtime:int, valuesize:int, readprop:float, updateprop:float, bench_cores:list[int]):
     """
     Returns a dictionary of the form
