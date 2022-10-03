@@ -23,12 +23,12 @@ require (
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-ini/ini v1.49.0 // indirect
 	github.com/go-redis/redis v6.15.1+incompatible
+	github.com/go-redis/redis/v8 v8.8.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gocql/gocql v0.0.0-20181124151448-70385f88b28b
 	github.com/gogo/protobuf v1.2.0 // indirect
 	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9 // indirect
-	github.com/goose-lang/std v0.0.0-20210910024443-21c4593d3dec // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/magiconair/properties v1.8.5
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/mit-pdos/gokv v0.0.0-20210914185913-c6dbff529ac6
+	github.com/mit-pdos/gokv v0.0.0-20221003171010-4e7b5450a52b
 	github.com/mit-pdos/lockservice v0.0.0-20210503234304-8c6a5346c04f
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pingcap/errors v0.11.1
@@ -46,10 +46,11 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a // indirect
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
-	github.com/tchajed/marshal v0.2.0
+	github.com/tchajed/marshal v0.4.2
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tikv/client-go v0.0.0-20190421092910-44b82dcc9f4a
+	github.com/upamanyus/urpc v0.0.0-20210412143254-587eba24740c // indirect
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20181031023651-12c4817b42c5 // indirect
