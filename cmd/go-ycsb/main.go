@@ -74,6 +74,8 @@ import (
 	// _ "github.com/pingcap/go-ycsb/db/gokv"
 	// Register memkv
 	_ "github.com/pingcap/go-ycsb/db/memkv"
+	// Register memkv
+	_ "github.com/pingcap/go-ycsb/db/pbkv"
 )
 
 var (
