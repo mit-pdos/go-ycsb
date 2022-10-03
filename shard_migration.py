@@ -93,8 +93,8 @@ def start_memkv_multiserver(config:list[list[int]]):
     for i, corelist in enumerate(config):
         start_shard_multicore(12300 + i, corelist, i == 0)
         time.sleep(1.0)
-        if i > 0:
-            run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
+        # if i > 0:
+            # run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(12300 + i)], cwd=gokvdir)
     print("[INFO] Started kv service with {0} server(s)".format(len(config)))
 
 def start_shard_multicore(port:int, corelist:list[int], init:bool):
@@ -141,7 +141,8 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
                                   '-p', 'memkv.coord=127.0.0.1:12200',
-                                  '-p', 'warmup=10', # TODO: increase warmup
+                                  '-p', 'warmup=10',
+                                  '-p', 'recordcount=100000',
                                   ], c), cwd=goycsbdir)
     if p is None:
         return ''
@@ -158,11 +159,20 @@ def goycsb_bench(threads:int, runtime:int, valuesize:int, readprop:float, update
     p.terminate()
     return totalopss
 
-def sleep_then_runcmd(t:float, port:int, cores:list[int]):
-    time.sleep(max(t - 1.0, 0))
-    start_shard_multicore(port, cores, False)
-    time.sleep(1.0)
-    run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:" + str(port)], cwd=gokvdir)
+def add_servers():
+
+    time.sleep(10) # warmup
+
+    time.sleep(30)
+    run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:12301"], cwd=gokvdir)
+
+    time.sleep(30)
+    run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:12302"], cwd=gokvdir)
+
+    time.sleep(30)
+    run_command(["go", "run", "./cmd/memkvctl", "-coord", "127.0.0.1:12200", "add", "127.0.0.1:12303"], cwd=gokvdir)
+
+    time.sleep(30)
     return
 
 def main():
@@ -174,15 +184,15 @@ def main():
     os.makedirs(global_args.outdir, exist_ok=True)
     resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
 
-    start_memkv_multiserver(config['initial'])
+    start_memkv_multiserver([[0], [10], [20], [30]])
 
-    clnt_cores = config['clntcores']
-    threading.Thread(target=sleep_then_runcmd, args=(60.0, 12301, config['newcores'])).start()
-    a = goycsb_bench(config['clntthreads'], 200, 128, 1.0, 0.0, clnt_cores)
+    threading.Thread(target=add_servers).start()
+
+    a = goycsb_bench(config['clntthreads'], 120, 128, 1.0, 0.0, config['clntcores'])
     with open(path.join(global_args.outdir, 'shard_migration.dat'), 'a+') as outfile:
         ops_so_far = 0
         for e in a:
-            outfile.write('{0},{1}\n'.format(e[0], e[1] - ops_so_far))
+            outfile.write('{0},{1}\n'.format(e[0], 2*(e[1] - ops_so_far)))
             ops_so_far = e[1]
 
 if __name__=='__main__':

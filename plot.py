@@ -3,18 +3,10 @@ from os import path
 import argparse
 import subprocess
 import re
-import matplotlib
-import matplotlib.pyplot as plt
 import json
 import os
 import resource
 import itertools
-
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 16
-})
 
 parser = argparse.ArgumentParser(
 description="Generate latency-throughput graphs"
@@ -46,8 +38,8 @@ def plot_lt(datas):
     Assumes data is in format
     [ (kvname, numthreads, { 'OPERATION_TYPE': (throughput in ops/sec, latency in us), ... } ),  ... ]
     """
-    marker = itertools.cycle(('+', '.', 'o', '*'))
-    fig = plt.figure()
+    # marker = itertools.cycle(('+', '.', 'o', '*'))
+    # fig = plt.figure()
     for data in datas:
         # rxs = []
         # rys = []
@@ -63,10 +55,10 @@ def plot_lt(datas):
             y = 0.0
             for k, v in d['lts'].items():
                 if k == 'READ':
-                    throw("unimpl")
-                if k == 'UPDATE':
                     x = x + v['thruput']
                     y = y + v['avg_latency'] / 1000
+                if k == 'UPDATE':
+                    throw("unimpl")
             xys.append((x,y))
 
         with open(data[0]['service'] + '.dat', 'w') as f:
@@ -86,10 +78,10 @@ def plot_lt(datas):
 
 def main():
     datas = []
-    redis_write_data = read_lt_data(path.join(global_args.outdir, 'rediskv_update_closed_lt.jsons'))
-    memkv_write_data = read_lt_data(path.join(global_args.outdir, 'memkv_update_closed_lt.jsons'))
-    datas += [redis_write_data, memkv_write_data]
-    plot_lt(datas)
+    # redis_write_data = read_lt_data(path.join(global_args.outdir, 'rediskv_update_closed_lt.jsons'))
+    memkv_data = read_lt_data(path.join(global_args.outdir, 'memkv_lt.jsons'))
+    # datas += [redis_write_data, memkv_write_data]
+    plot_lt([memkv_data])
 
 if __name__=='__main__':
     main()

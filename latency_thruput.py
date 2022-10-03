@@ -131,7 +131,7 @@ def goycsb_bench(kvname:int, threads:int, runtime:int, valuesize:int, readprop:f
     p = start_command(many_cores(['go', 'run',
                                   path.join(goycsbdir, './cmd/go-ycsb'),
                                   'run', kvname,
-                                  '-P', path.join('../gokv/bench/memkv_workload'),
+                                  '-P', '../gokv/bench/' + kvname + '_workload',
                                   '--threads', str(threads),
                                   '--target', '-1',
                                   '--interval', '1',
@@ -140,9 +140,13 @@ def goycsb_bench(kvname:int, threads:int, runtime:int, valuesize:int, readprop:f
                                   '-p', 'requestdistribution=uniform',
                                   '-p', 'readproportion=' + str(readprop),
                                   '-p', 'updateproportion=' + str(updateprop),
-                                  '-p', 'memkv.coord=' + config['hosts'][kvname],
+                                  '-p',
+                                  'rediskv.addr=' + config['hosts']['rediskv']
+                                  if kvname == 'rediskv'
+                                  else
+                                  'memkv.coord=' + config['hosts']['memkv'],
                                   '-p', 'warmup=20', # TODO: increase warmup
-                                  '-p', 'recordcount', str(keys),
+                                  '-p', 'recordcount=', str(keys),
                                   ], c), cwd=goycsbdir)
 
     if p is None:
@@ -213,10 +217,10 @@ def main():
     resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
 
     # start_memkv_multiserver([[0]])
-    closed_lt('memkv', 128, path.join(global_args.outdir, 'memkv_closed_lt.jsons'), config['read'], config['write'], config['keys'], num_threads, config['benchcores'])
+    closed_lt('memkv', 128, path.join(global_args.outdir, 'memkv_lt.jsons'), config['read'], config['write'], config['keys'], num_threads, config['benchcores'])
 
     # start_redis()
-    closed_lt('rediskv', 128, path.join(global_args.outdir, 'redis_lt.jsons'), config['read'], config['write'], config['keysize'], num_threads, config['benchcores'])
+    closed_lt('rediskv', 128, path.join(global_args.outdir, 'redis_lt.jsons'), config['read'], config['write'], config['keys'], num_threads, config['benchcores'])
 
 if __name__=='__main__':
     main()
