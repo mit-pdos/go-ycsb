@@ -3,9 +3,10 @@ package pbkv
 import (
 	"context"
 
-	"github.com/mit-pdos/gokv/simplepb/apps/kv"
-	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/magiconair/properties"
+	"github.com/mit-pdos/gokv/grove_ffi"
+	"github.com/mit-pdos/gokv/simplepb/apps/kv"
+
 	// "github.com/pingcap/go-ycsb/pkg/prop"
 	// "github.com/pingcap/go-ycsb/pkg/util"
 	"github.com/pingcap/go-ycsb/pkg/ycsb"
@@ -66,7 +67,8 @@ type kvCreator struct{}
 
 func (r kvCreator) Create(p *properties.Properties) (ycsb.DB, error) {
 	// cl := kv.MakeKVClerkPool(1, uint64(p.GetInt(memkvNumClients, 100)))
-	cl := kv.MakeClerk(grove_ffi.MakeAddress(p.GetString(pbkvConfig, "")))
+	configAddr := grove_ffi.MakeAddress(p.GetString(pbkvConfig, ""))
+	cl := kv.MakeClerk(configAddr)
 	return &kvDB{cl}, nil
 }
 
@@ -75,5 +77,5 @@ func init() {
 }
 
 const (
-	pbkvConfig = "pb.configAddr"
+	pbkvConfig = "pbkv.configAddr"
 )
