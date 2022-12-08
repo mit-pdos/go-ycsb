@@ -11,7 +11,7 @@ require (
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/boltdb/bolt v1.3.1
-	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
+	github.com/chzyer/readline v1.5.0
 	github.com/dgraph-io/badger v1.5.4
 	github.com/dgryski/go-farm v0.0.0-20180109070241-2de33835d102 // indirect
 	github.com/facebookgo/ensure v0.0.0-20160127193407-b4ab57deab51 // indirect
@@ -31,10 +31,10 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
 	github.com/lib/pq v0.0.0-20181016162627-9eb73efc1fcc
-	github.com/magiconair/properties v1.8.5
+	github.com/magiconair/properties v1.8.6
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/mit-pdos/gokv v0.0.0-20221003171010-4e7b5450a52b
+	github.com/mit-pdos/gokv v0.0.0-20221202064633-292a4992c9eb
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/onsi/ginkgo v1.15.0 // indirect
 	github.com/onsi/gomega v1.10.5 // indirect
@@ -65,5 +65,7 @@ require (
 )
 
 replace github.com/apache/thrift => github.com/apache/thrift v0.0.0-20171203172758-327ebb6c2b6d
+
+replace github.com/mit-pdos/gokv => ../gokv
 
 go 1.13

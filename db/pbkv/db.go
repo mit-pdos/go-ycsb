@@ -13,7 +13,7 @@ import (
 )
 
 type kvDB struct {
-	cl *kv.Clerk
+	cl *kv.ClerkPool
 }
 
 func (g *kvDB) Read(ctx context.Context, table string, key string, fields []string) (map[string][]byte, error) {
@@ -40,6 +40,7 @@ func (g *kvDB) Update(ctx context.Context, table string, key string, values map[
 		data = v
 	}
 
+	// log.Println("KV put with ", key, data)
 	g.cl.Put([]byte(key), data)
 	return nil
 }
@@ -68,7 +69,7 @@ type kvCreator struct{}
 func (r kvCreator) Create(p *properties.Properties) (ycsb.DB, error) {
 	// cl := kv.MakeKVClerkPool(1, uint64(p.GetInt(memkvNumClients, 100)))
 	configAddr := grove_ffi.MakeAddress(p.GetString(pbkvConfig, ""))
-	cl := kv.MakeClerk(configAddr)
+	cl := kv.MakeClerkPool(configAddr)
 	return &kvDB{cl}, nil
 }
 
