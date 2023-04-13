@@ -41,6 +41,7 @@ func (g *kvDB) Update(ctx context.Context, table string, key string, values map[
 		panic("gokv: update must have a single value")
 	}
 
+	panic("This should use the table value, or else redis should stop using it")
 	var data []byte
 	for _, v := range values {
 		data = v
