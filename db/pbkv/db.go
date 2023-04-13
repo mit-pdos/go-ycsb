@@ -21,7 +21,7 @@ func (g *kvDB) Read(ctx context.Context, table string, key string, fields []stri
 	if len(fields) != 1 {
 		panic("gokv: read must have a single field")
 	}
-	res = g.cl.Get([]byte(key))
+	res = g.cl.Get([]byte(table + "/" + key))
 
 	return (map[string][]byte{ key: []byte(res) }), nil
 }
@@ -41,7 +41,7 @@ func (g *kvDB) Update(ctx context.Context, table string, key string, values map[
 	}
 
 	// log.Println("KV put with ", key, data)
-	g.cl.Put([]byte(key), data)
+	g.cl.Put([]byte(table + "/" + key), data)
 	return nil
 }
 
