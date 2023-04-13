@@ -27,7 +27,17 @@ func (g *kvDB) Read(ctx context.Context, table string, key string, fields []stri
 }
 
 func (g *kvDB) Insert(ctx context.Context, table string, key string, values map[string][]byte) error {
-	panic("pb_kv: should always use update instead of insert")
+	if len(values) != 1 {
+		panic("pb_kv: insert must have a single value")
+	}
+
+	var data []byte
+	for _, v := range values {
+		data = v
+	}
+
+	g.cl.Put([]byte(table + "/" + key), data)
+	return nil
 }
 
 func (g *kvDB) Update(ctx context.Context, table string, key string, values map[string][]byte) error {

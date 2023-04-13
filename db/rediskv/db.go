@@ -68,7 +68,17 @@ func (r *redis) Update(ctx context.Context, table string, key string, values map
 }
 
 func (r *redis) Insert(ctx context.Context, table string, key string, values map[string][]byte) error {
-	panic("rediskv: should always use update instead of insert")
+	// panic("rediskv: should always use update instead of insert")
+	if len(values) != 1 {
+		panic("rediskv: insert must have a single value")
+	}
+
+	var data []byte
+	for _, v := range values {
+		data = v
+	}
+
+	return r.client.Set(table+"/"+key, string(data), 0).Err()
 }
 
 func (r *redis) Delete(ctx context.Context, table string, key string) error {
