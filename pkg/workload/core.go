@@ -133,6 +133,11 @@ func createOperationGenerator(p *properties.Properties) *generator.Discrete {
 	return operationChooser
 }
 
+// Load implements the Workload Load interface.
+func (c *core) Load(ctx context.Context, db ycsb.DB, totalCount int64) error {
+	return nil
+}
+
 // InitThread implements the Workload InitThread interface.
 func (c *core) InitThread(ctx context.Context, _ int, _ int) context.Context {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -267,7 +272,7 @@ func (c *core) DoInsert(ctx context.Context, db ycsb.DB) error {
 	var err error
 	for {
 		err = db.Insert(ctx, c.table, dbKey, values)
-		if err == nil {
+		if err != nil {
 			break
 		}
 
@@ -322,7 +327,7 @@ func (c *core) DoBatchInsert(ctx context.Context, batchSize int, db ycsb.DB) err
 	var err error
 	for {
 		err = batchDB.BatchInsert(ctx, c.table, keys, values)
-		if err == nil {
+		if err != nil {
 			break
 		}
 
@@ -403,10 +408,7 @@ func (c *core) nextKeyNum(state *coreState) int64 {
 			keyNum = c.transactionInsertKeySequence.Last() - c.keyChooser.Next(r)
 		}
 	} else {
-		keyNum = math.MaxInt64
-		for keyNum > c.transactionInsertKeySequence.Last() {
-			keyNum = c.keyChooser.Next(r)
-		}
+		keyNum = c.keyChooser.Next(r)
 	}
 	return keyNum
 }
@@ -439,7 +441,7 @@ func (c *core) doTransactionRead(ctx context.Context, db ycsb.DB, state *coreSta
 func (c *core) doTransactionReadModifyWrite(ctx context.Context, db ycsb.DB, state *coreState) error {
 	start := time.Now()
 	defer func() {
-		measurement.Measure("READ_MODIFY_WRITE", time.Now().Sub(start))
+		measurement.Measure("READ_MODIFY_WRITE", start, time.Now().Sub(start))
 	}()
 
 	r := state.r
@@ -645,24 +647,27 @@ func (coreCreator) Create(p *properties.Properties) (ycsb.Workload, error) {
 
 	c.keySequence = generator.NewCounter(insertStart)
 	c.operationChooser = createOperationGenerator(p)
+	var keyrangeLowerBound int64 = insertStart
+	var keyrangeUpperBound int64 = insertStart + insertCount - 1
 
 	c.transactionInsertKeySequence = generator.NewAcknowledgedCounter(c.recordCount)
 	switch requestDistrib {
 	case "uniform":
-		c.keyChooser = generator.NewUniform(insertStart, insertStart+insertCount-1)
+		c.keyChooser = generator.NewUniform(keyrangeLowerBound, keyrangeUpperBound)
 	case "sequential":
-		c.keyChooser = generator.NewSequential(insertStart, insertStart+insertCount-1)
+		c.keyChooser = generator.NewSequential(keyrangeLowerBound, keyrangeUpperBound)
 	case "zipfian":
 		insertProportion := p.GetFloat64(prop.InsertProportion, prop.InsertProportionDefault)
 		opCount := p.GetInt64(prop.OperationCount, 0)
 		expectedNewKeys := int64(float64(opCount) * insertProportion * 2.0)
-		c.keyChooser = generator.NewScrambledZipfian(insertStart, insertStart+insertCount+expectedNewKeys, generator.ZipfianConstant)
+		keyrangeUpperBound = insertStart + insertCount + expectedNewKeys
+		c.keyChooser = generator.NewScrambledZipfian(keyrangeLowerBound, keyrangeUpperBound, generator.ZipfianConstant)
 	case "latest":
 		c.keyChooser = generator.NewSkewedLatest(c.transactionInsertKeySequence)
 	case "hotspot":
 		hotsetFraction := p.GetFloat64(prop.HotspotDataFraction, prop.HotspotDataFractionDefault)
 		hotopnFraction := p.GetFloat64(prop.HotspotOpnFraction, prop.HotspotOpnFractionDefault)
-		c.keyChooser = generator.NewHotspot(insertStart, insertStart+insertCount-1, hotsetFraction, hotopnFraction)
+		c.keyChooser = generator.NewHotspot(keyrangeLowerBound, keyrangeUpperBound, hotsetFraction, hotopnFraction)
 	case "exponential":
 		percentile := p.GetFloat64(prop.ExponentialPercentile, prop.ExponentialPercentileDefault)
 		frac := p.GetFloat64(prop.ExponentialFrac, prop.ExponentialFracDefault)
@@ -670,6 +675,7 @@ func (coreCreator) Create(p *properties.Properties) (ycsb.Workload, error) {
 	default:
 		util.Fatalf("unknown request distribution %s", requestDistrib)
 	}
+	fmt.Println(fmt.Sprintf("Using request distribution '%s' a keyrange of [%d %d]", requestDistrib, keyrangeLowerBound, keyrangeUpperBound))
 
 	c.fieldChooser = generator.NewUniform(0, c.fieldCount-1)
 	switch scanLengthDistrib {
@@ -696,4 +702,5 @@ func (coreCreator) Create(p *properties.Properties) (ycsb.Workload, error) {
 
 func init() {
 	ycsb.RegisterWorkloadCreator("core", coreCreator{})
+	ycsb.RegisterWorkloadCreator("site.ycsb.workloads.CoreWorkload", coreCreator{})
 }

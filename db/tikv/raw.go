@@ -19,10 +19,11 @@ import (
 	"strings"
 
 	"github.com/magiconair/properties"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/go-ycsb/pkg/util"
 	"github.com/pingcap/go-ycsb/pkg/ycsb"
-	"github.com/tikv/client-go/config"
-	"github.com/tikv/client-go/rawkv"
+	"github.com/pingcap/kvproto/pkg/kvrpcpb"
+	"github.com/tikv/client-go/v2/rawkv"
 )
 
 type rawDB struct {
@@ -31,9 +32,15 @@ type rawDB struct {
 	bufPool *util.BufPool
 }
 
-func createRawDB(p *properties.Properties, conf config.Config) (ycsb.DB, error) {
+func createRawDB(p *properties.Properties) (ycsb.DB, error) {
 	pdAddr := p.GetString(tikvPD, "127.0.0.1:2379")
-	db, err := rawkv.NewClient(strings.Split(pdAddr, ","), conf)
+	apiVersionStr := strings.ToUpper(p.GetString(tikvAPIVersion, "V1"))
+	apiVersion, ok := kvrpcpb.APIVersion_value[apiVersionStr]
+	if !ok {
+		return nil, errors.Errorf("Invalid tikv apiversion %s.", apiVersionStr)
+	}
+	db, err := rawkv.NewClientWithOpts(context.Background(), strings.Split(pdAddr, ","),
+		rawkv.WithAPIVersion(kvrpcpb.APIVersion(apiVersion)))
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +70,7 @@ func (db *rawDB) getRowKey(table string, key string) []byte {
 }
 
 func (db *rawDB) Read(ctx context.Context, table string, key string, fields []string) (map[string][]byte, error) {
-	row, err := db.db.Get(db.getRowKey(table, key))
+	row, err := db.db.Get(ctx, db.getRowKey(table, key))
 	if err != nil {
 		return nil, err
 	} else if row == nil {
@@ -78,7 +85,7 @@ func (db *rawDB) BatchRead(ctx context.Context, table string, keys []string, fie
 	for i, key := range keys {
 		rowKeys[i] = db.getRowKey(table, key)
 	}
-	values, err := db.db.BatchGet(rowKeys)
+	values, err := db.db.BatchGet(ctx, rowKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +102,7 @@ func (db *rawDB) BatchRead(ctx context.Context, table string, keys []string, fie
 }
 
 func (db *rawDB) Scan(ctx context.Context, table string, startKey string, count int, fields []string) ([]map[string][]byte, error) {
-	_, rows, err := db.db.Scan(db.getRowKey(table, startKey), nil, count)
+	_, rows, err := db.db.Scan(ctx, db.getRowKey(table, startKey), nil, count)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +125,7 @@ func (db *rawDB) Scan(ctx context.Context, table string, startKey string, count 
 }
 
 func (db *rawDB) Update(ctx context.Context, table string, key string, values map[string][]byte) error {
-	row, err := db.db.Get(db.getRowKey(table, key))
+	row, err := db.db.Get(ctx, db.getRowKey(table, key))
 	if err != nil {
 		return nil
 	}
@@ -148,20 +155,22 @@ func (db *rawDB) BatchUpdate(ctx context.Context, table string, keys []string, v
 		}
 		rawValues = append(rawValues, rawData)
 	}
-	return db.db.BatchPut(rawKeys, rawValues)
+	return db.db.BatchPut(ctx, rawKeys, rawValues)
 }
 
 func (db *rawDB) Insert(ctx context.Context, table string, key string, values map[string][]byte) error {
 	// Simulate TiDB data
 	buf := db.bufPool.Get()
-	defer db.bufPool.Put(buf)
+	defer func() {
+		db.bufPool.Put(buf)
+	}()
 
-	rowData, err := db.r.Encode(buf.Bytes(), values)
+	buf, err := db.r.Encode(buf, values)
 	if err != nil {
 		return err
 	}
 
-	return db.db.Put(db.getRowKey(table, key), rowData)
+	return db.db.Put(ctx, db.getRowKey(table, key), buf)
 }
 
 func (db *rawDB) BatchInsert(ctx context.Context, table string, keys []string, values []map[string][]byte) error {
@@ -175,11 +184,11 @@ func (db *rawDB) BatchInsert(ctx context.Context, table string, keys []string, v
 		}
 		rawValues = append(rawValues, rawData)
 	}
-	return db.db.BatchPut(rawKeys, rawValues)
+	return db.db.BatchPut(ctx, rawKeys, rawValues)
 }
 
 func (db *rawDB) Delete(ctx context.Context, table string, key string) error {
-	return db.db.Delete(db.getRowKey(table, key))
+	return db.db.Delete(ctx, db.getRowKey(table, key))
 }
 
 func (db *rawDB) BatchDelete(ctx context.Context, table string, keys []string) error {
@@ -187,5 +196,5 @@ func (db *rawDB) BatchDelete(ctx context.Context, table string, keys []string) e
 	for i, key := range keys {
 		rowKeys[i] = db.getRowKey(table, key)
 	}
-	return db.db.BatchDelete(rowKeys)
+	return db.db.BatchDelete(ctx, rowKeys)
 }

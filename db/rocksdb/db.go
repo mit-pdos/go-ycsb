@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build rocksdb
+//go:build rocksdb
 
 package rocksdb
 
@@ -27,7 +27,7 @@ import (
 	"github.com/tecbot/gorocksdb"
 )
 
-//  properties
+// properties
 const (
 	rocksdbDir = "rocksdb.dir"
 	// DBOptions
@@ -59,11 +59,11 @@ const (
 	rocksdbBlockRestartInterval             = "rocksdb.block_restart_interval"
 	rocksdbFilterPolicy                     = "rocksdb.filter_policy"
 	rocksdbIndexType                        = "rocksdb.index_type"
+	rocksdbWALDir                           = "rocksdb.wal_dir"
 	// TODO: add more configurations
 )
 
-type rocksDBCreator struct {
-}
+type rocksDBCreator struct{}
 
 type rocksDB struct {
 	p *properties.Properties
@@ -155,6 +155,7 @@ func getOptions(p *properties.Properties) *gorocksdb.Options {
 	opts.SetUseFsync(p.GetBool(rocksdbUseFsync, false))
 	opts.SetWriteBufferSize(p.GetInt(rocksdbWriteBufferSize, 64<<20))
 	opts.SetMaxWriteBufferNumber(p.GetInt(rocksdbMaxWriteBufferNumber, 2))
+	opts.SetWalDir(p.GetString(rocksdbWALDir, ""))
 
 	opts.SetBlockBasedTableFactory(getTableOptions(p))
 
@@ -230,14 +231,14 @@ func (db *rocksDB) Update(ctx context.Context, table string, key string, values 
 	buf := db.bufPool.Get()
 	defer db.bufPool.Put(buf)
 
-	rowData, err := db.r.Encode(buf.Bytes(), m)
+	buf, err = db.r.Encode(buf, m)
 	if err != nil {
 		return err
 	}
 
 	rowKey := db.getRowKey(table, key)
 
-	return db.db.Put(db.writeOpts, rowKey, rowData)
+	return db.db.Put(db.writeOpts, rowKey, buf)
 }
 
 func (db *rocksDB) Insert(ctx context.Context, table string, key string, values map[string][]byte) error {
@@ -246,11 +247,11 @@ func (db *rocksDB) Insert(ctx context.Context, table string, key string, values 
 	buf := db.bufPool.Get()
 	defer db.bufPool.Put(buf)
 
-	rowData, err := db.r.Encode(buf.Bytes(), values)
+	buf, err := db.r.Encode(buf, values)
 	if err != nil {
 		return err
 	}
-	return db.db.Put(db.writeOpts, rowKey, rowData)
+	return db.db.Put(db.writeOpts, rowKey, buf)
 }
 
 func (db *rocksDB) Delete(ctx context.Context, table string, key string) error {

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build foundationdb
+//go:build foundationdb
 
 package foundationdb
 
@@ -152,12 +152,12 @@ func (db *fDB) Update(ctx context.Context, table string, key string, values map[
 		buf := db.bufPool.Get()
 		defer db.bufPool.Put(buf)
 
-		rowData, err := db.r.Encode(buf.Bytes(), data)
+		buf, err = db.r.Encode(buf, data)
 		if err != nil {
 			return nil, err
 		}
 
-		tr.Set(fdb.Key(rowKey), rowData)
+		tr.Set(fdb.Key(rowKey), buf)
 		return
 	})
 
@@ -169,14 +169,14 @@ func (db *fDB) Insert(ctx context.Context, table string, key string, values map[
 	buf := db.bufPool.Get()
 	defer db.bufPool.Put(buf)
 
-	rowData, err := db.r.Encode(buf.Bytes(), values)
+	buf, err := db.r.Encode(buf, values)
 	if err != nil {
 		return err
 	}
 
 	rowKey := db.getRowKey(table, key)
 	_, err = db.db.Transact(func(tr fdb.Transaction) (ret interface{}, e error) {
-		tr.Set(fdb.Key(rowKey), rowData)
+		tr.Set(fdb.Key(rowKey), buf)
 		return
 	})
 	return err
